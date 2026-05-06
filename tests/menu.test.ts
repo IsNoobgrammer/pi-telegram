@@ -546,9 +546,9 @@ test("Menu helpers keep model detail selection stable after scope changes", () =
   const modelB = createMenuModel("anthropic", "claude-3");
   const state = createMenuState<MenuModel>(2, {
     scope: "scoped",
-    scopedModels: [{ model: modelA }, { model: modelB }],
+    scopedModels: [{ model: modelA }, { model: modelB, thinkingLevel: "high" }],
     allModels: [{ model: modelA }, { model: modelB }],
-    scopedModelPatterns: ["openai/gpt-5", "anthropic/claude-3"],
+    scopedModelPatterns: ["openai/gpt-5", "anthropic/claude-3:high"],
   });
   assert.deepEqual(
     buildTelegramModelCallbackPlan({
@@ -561,6 +561,23 @@ test("Menu helpers keep model detail selection stable after scope changes", () =
       hasActiveToolExecutions: false,
     }),
     { kind: "update-menu" },
+  );
+  assert.deepEqual(
+    buildTelegramModelCallbackPlan({
+      data: "model:pick-selected",
+      state,
+      activeModel: modelA,
+      currentThinkingLevel: "medium",
+      isIdle: true,
+      canRestartBusyRun: false,
+      hasActiveToolExecutions: false,
+    }),
+    {
+      kind: "switch-model",
+      selection: state.scopedModels[1],
+      mode: "idle",
+      callbackText: "Switched to claude-3",
+    },
   );
   assert.deepEqual(
     buildTelegramModelCallbackPlan({
@@ -639,6 +656,36 @@ test("Menu helpers expand wildcard scope patterns when disabling one matched mod
   );
 });
 
+test("Menu helpers apply scoped thinking from active model detail", () => {
+  const model = createMenuModel("openai", "gpt-5");
+  const state = createMenuState<MenuModel>(2, {
+    scope: "scoped",
+    scopedModels: [{ model, thinkingLevel: "high" }],
+    allModels: [{ model }],
+    selectedModelIndex: 0,
+    selectedModelKey: "openai/gpt-5",
+    mode: "model-detail",
+  });
+  assert.deepEqual(
+    buildTelegramModelCallbackPlan({
+      data: "model:pick-selected",
+      state,
+      activeModel: model,
+      currentThinkingLevel: "medium",
+      isIdle: true,
+      canRestartBusyRun: false,
+      hasActiveToolExecutions: false,
+    }),
+    {
+      kind: "refresh-status",
+      selection: state.scopedModels[0],
+      callbackText: "Model: gpt-5",
+      shouldApplyThinkingLevel: true,
+    },
+  );
+  assert.equal(state.mode, "model");
+});
+
 test("Menu helpers send active detail selection back to model list page", () => {
   const models = Array.from({ length: 8 }, (_value, index) =>
     createMenuModel("openai", `model-${index}`),
@@ -661,7 +708,12 @@ test("Menu helpers send active detail selection back to model list page", () => 
       canRestartBusyRun: false,
       hasActiveToolExecutions: false,
     }),
-    { kind: "update-menu", text: "Model: model-7" },
+    {
+      kind: "refresh-status",
+      selection: state.allModels[7],
+      callbackText: "Model: model-7",
+      shouldApplyThinkingLevel: false,
+    },
   );
   assert.equal(state.mode, "model");
   assert.equal(state.page, 1);

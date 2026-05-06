@@ -48,14 +48,27 @@ test("Update helpers normalize emoji reactions and collect emoji-only entries", 
       [11, "lightning", "⚡"],
       [12, "heart", "❤"],
       [13, "dove", "🕊"],
+      [14, "fire", "🔥"],
     ],
   );
   assert.deepEqual(
     TELEGRAM_REMOVAL_REACTIONS.map((reaction) => reaction.id),
-    [20, 21, 22, 23],
+    [20, 21, 22, 23, 24],
   );
-  assert.deepEqual(TELEGRAM_PRIORITY_REACTION_EMOJIS, ["👍", "⚡", "❤", "🕊"]);
-  assert.deepEqual(TELEGRAM_REMOVAL_REACTION_EMOJIS, ["👎", "👻", "💔", "💩"]);
+  assert.deepEqual(TELEGRAM_PRIORITY_REACTION_EMOJIS, [
+    "👍",
+    "⚡",
+    "❤",
+    "🕊",
+    "🔥",
+  ]);
+  assert.deepEqual(TELEGRAM_REMOVAL_REACTION_EMOJIS, [
+    "👎",
+    "👻",
+    "💔",
+    "💩",
+    "🗑",
+  ]);
 });
 
 test("Update helpers extract deleted business-message ids only from Bot API shapes", () => {
@@ -462,7 +475,7 @@ test("Update runtime handles authorized reaction priority and removal effects", 
       user: { id: 7, is_bot: false },
       message_id: 16,
       old_reaction: [],
-      new_reaction: [{ type: "emoji", emoji: "👻" }],
+      new_reaction: [{ type: "emoji", emoji: "🔥" }],
     },
     deps,
   );
@@ -472,7 +485,7 @@ test("Update runtime handles authorized reaction priority and removal effects", 
       user: { id: 7, is_bot: false },
       message_id: 17,
       old_reaction: [],
-      new_reaction: [{ type: "emoji", emoji: "💔" }],
+      new_reaction: [{ type: "emoji", emoji: "👻" }],
     },
     deps,
   );
@@ -482,7 +495,27 @@ test("Update runtime handles authorized reaction priority and removal effects", 
       user: { id: 7, is_bot: false },
       message_id: 18,
       old_reaction: [],
+      new_reaction: [{ type: "emoji", emoji: "💔" }],
+    },
+    deps,
+  );
+  await handleAuthorizedTelegramReactionUpdate(
+    {
+      chat: { type: "private" },
+      user: { id: 7, is_bot: false },
+      message_id: 19,
+      old_reaction: [],
       new_reaction: [{ type: "emoji", emoji: "💩" }],
+    },
+    deps,
+  );
+  await handleAuthorizedTelegramReactionUpdate(
+    {
+      chat: { type: "private" },
+      user: { id: 7, is_bot: false },
+      message_id: 20,
+      old_reaction: [],
+      new_reaction: [{ type: "emoji", emoji: "🗑️" }],
     },
     deps,
   );
@@ -494,12 +527,15 @@ test("Update runtime handles authorized reaction priority and removal effects", 
     "prioritize:13:⚡",
     "prioritize:14:❤",
     "prioritize:15:🕊",
-    "media:16",
-    "remove:16",
+    "prioritize:16:🔥",
     "media:17",
     "remove:17",
     "media:18",
     "remove:18",
+    "media:19",
+    "remove:19",
+    "media:20",
+    "remove:20",
   ]);
 });
 

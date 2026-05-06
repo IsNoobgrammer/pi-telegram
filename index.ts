@@ -53,8 +53,6 @@ export default function (pi: Pi.ExtensionAPI) {
     Config.createTelegramProactivePushChecker(configStore);
   const setProactivePushEnabled =
     Config.createTelegramProactivePushSetter(configStore);
-  const proactivePromptTargetStore =
-    Config.createTelegramProactivePromptTargetStore();
   const lockRuntime = Locks.createTelegramLockRuntime<Pi.ExtensionContext>();
   const lockOwnershipGuard =
     Locks.createTelegramLockOwnershipGuard(lockRuntime);
@@ -496,7 +494,6 @@ export default function (pi: Pi.ExtensionAPI) {
     sendOutboundReplyArtifacts: outboundReplyArtifactSender,
     isCurrentOwner: lockOwnershipGuard.ownsContext,
     getDefaultChatId: proactivePushChatIdGetter,
-    consumeProactiveReplyToMessageId: proactivePromptTargetStore.consumeForChat,
     isProactivePushEnabled,
     recordRuntimeEvent,
     getActiveToolExecutions: lifecycle.getActiveToolExecutions,

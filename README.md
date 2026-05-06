@@ -110,8 +110,8 @@ Run these inside π, not Telegram:
 
 - If you send more Telegram messages while π is busy, they enter the default prompt queue and are processed in order.
 - Very long text messages that Telegram appears to split automatically are coalesced through a short conservative debounce and forwarded to π as one prompt when the first chunk is near Telegram's text limit, currently using a 3600-character threshold. Commands, bot messages, media groups, and normal short follow-ups are not coalesced.
-- `👍`, `⚡️`, `❤️`, and `🕊` move a waiting prompt into the priority prompt queue, behind control actions but ahead of default prompts. Removing the last priority reaction sends it back to its normal queue position, and adding a priority reaction again gives it a fresh priority position.
-- `👎`, `👻`, `💔`, and `💩` remove a waiting turn from the queue. Telegram Bot API does not expose ordinary DM message-deletion events through the polling path used here, so queue removal is bound to removal reactions.
+- `👍`, `⚡️`, `❤️`, `🕊`, and `🔥` move a waiting prompt into the priority prompt queue, behind control actions but ahead of default prompts. Removing the last priority reaction sends it back to its normal queue position, and adding a priority reaction again gives it a fresh priority position.
+- `👎`, `👻`, `💔`, `💩`, and `🗑` remove a waiting turn from the queue. Telegram Bot API does not expose ordinary DM message-deletion events through the polling path used here, so queue removal is bound to removal reactions.
 - Reactions apply to any waiting Telegram turn, including text, voice, files, images, and media groups. For media groups, a reaction on any message in the group applies to the whole queued turn.
 - If you edit a Telegram message while it is still waiting in the queue, the queued turn is updated instead of creating a duplicate prompt. Edits after a turn has already started may not affect the active run.
 - Telegram replies to earlier text or caption messages are forwarded as `[reply]` context for normal prompts, while slash commands still parse from the new message text only.
@@ -237,7 +237,7 @@ Rich previews are sent through editable messages because Telegram drafts are tex
 The π status bar shows the current bridge state plus queued Telegram turns as compact previews. Busy labels distinguish states such as `active`, `dispatching`, `queued`, `tool running`, `model`, and `compacting`. Telegram prompt guidance asks agents to keep tables, dense list items, and compact text blocks within about 37 visible cells when possible so mobile replies stay readable.
 
 ```text
-telegram queued +3: [⚡ write a shell script…, summarize this image…, 📎 2 attachments]
+telegram active +3
 ```
 
 ## Notes

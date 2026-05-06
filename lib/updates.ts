@@ -31,12 +31,14 @@ export const TELEGRAM_PRIORITY_REACTIONS = [
   { id: 11, name: "lightning", emoji: "⚡" },
   { id: 12, name: "heart", emoji: "❤" },
   { id: 13, name: "dove", emoji: "🕊" },
+  { id: 14, name: "fire", emoji: "🔥" },
 ] as const;
 export const TELEGRAM_REMOVAL_REACTIONS = [
   { id: 20, name: "dislike", emoji: "👎" },
   { id: 21, name: "ghost", emoji: "👻" },
   { id: 22, name: "broken-heart", emoji: "💔" },
   { id: 23, name: "poop", emoji: "💩" },
+  { id: 24, name: "wastebasket", emoji: "🗑" },
 ] as const;
 export const TELEGRAM_PRIORITY_REACTION_EMOJIS =
   TELEGRAM_PRIORITY_REACTIONS.map((reaction) => reaction.emoji);

@@ -794,7 +794,6 @@ export interface TelegramAgentEndRuntimeDeps<
     options?: { replyToPrompt?: boolean },
   ) => Promise<void>;
   getDefaultChatId?: () => number | undefined;
-  consumeProactiveReplyToMessageId?: (chatId: number) => number | undefined;
   isProactivePushEnabled?: () => boolean;
   recordRuntimeEvent?: (
     category: string,
@@ -839,7 +838,6 @@ export interface TelegramAgentEndHookRuntimeDeps<
   >["planOutboundReply"];
   sendOutboundReplyArtifacts?: TelegramAgentEndRuntimeDeps<TTurn>["sendOutboundReplyArtifacts"];
   getDefaultChatId?: TelegramAgentEndRuntimeDeps<TTurn>["getDefaultChatId"];
-  consumeProactiveReplyToMessageId?: TelegramAgentEndRuntimeDeps<TTurn>["consumeProactiveReplyToMessageId"];
   isProactivePushEnabled?: TelegramAgentEndRuntimeDeps<TTurn>["isProactivePushEnabled"];
   recordRuntimeEvent?: TelegramAgentEndRuntimeDeps<TTurn>["recordRuntimeEvent"];
 }
@@ -957,7 +955,6 @@ export function createTelegramAgentEndHook<
       planOutboundReply: deps.planOutboundReply,
       sendOutboundReplyArtifacts: deps.sendOutboundReplyArtifacts,
       getDefaultChatId: deps.getDefaultChatId,
-      consumeProactiveReplyToMessageId: deps.consumeProactiveReplyToMessageId,
       isProactivePushEnabled: deps.isProactivePushEnabled,
       recordRuntimeEvent: deps.recordRuntimeEvent,
     });
@@ -998,14 +995,8 @@ export async function handleTelegramAgentEndRuntime<
     ) {
       const defaultChatId = deps.getDefaultChatId?.();
       if (defaultChatId !== undefined) {
-        const replyToMessageId =
-          deps.consumeProactiveReplyToMessageId?.(defaultChatId);
         try {
-          await deps.sendMarkdownReply(
-            defaultChatId,
-            replyToMessageId,
-            finalText,
-          );
+          await deps.sendMarkdownReply(defaultChatId, undefined, finalText);
         } catch (error) {
           deps.recordRuntimeEvent?.("proactive-push", error, {
             chatId: defaultChatId,

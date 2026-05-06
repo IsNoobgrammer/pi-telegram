@@ -148,31 +148,6 @@ export function createTelegramProactivePushChatIdGetter(deps: {
   return () => deps.getActiveTurnChatId() ?? deps.getAllowedUserId();
 }
 
-export interface TelegramProactivePromptTarget {
-  chatId: number;
-  messageId: number;
-}
-
-export interface TelegramProactivePromptTargetStore {
-  set: (target: TelegramProactivePromptTarget) => void;
-  consumeForChat: (chatId: number) => number | undefined;
-}
-
-export function createTelegramProactivePromptTargetStore(): TelegramProactivePromptTargetStore {
-  let target: TelegramProactivePromptTarget | undefined;
-  return {
-    set: (nextTarget) => {
-      target = nextTarget;
-    },
-    consumeForChat: (chatId) => {
-      if (!target || target.chatId !== chatId) return undefined;
-      const messageId = target.messageId;
-      target = undefined;
-      return messageId;
-    },
-  };
-}
-
 export type TelegramAuthorizationState =
   | { kind: "pair"; userId: number }
   | { kind: "allow" }

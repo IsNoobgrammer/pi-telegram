@@ -620,6 +620,19 @@ export function applyTelegramModelDetailSelection(
 export function getTelegramSelectedDetailModel<
   TModel extends MenuModel = MenuModel,
 >(state: TelegramModelMenuState<TModel>): TelegramMenuSelectionResult<TModel> {
+  const indexedSelection = getTelegramModelSelection(
+    state,
+    state.selectedModelIndex?.toString(),
+  );
+  if (indexedSelection.kind === "selected") {
+    if (!state.selectedModelKey) return indexedSelection;
+    const indexedKey = getCanonicalModelId(
+      indexedSelection.selection.model,
+    ).toLowerCase();
+    if (indexedKey === state.selectedModelKey.toLowerCase()) {
+      return indexedSelection;
+    }
+  }
   if (state.selectedModelKey) {
     const lowerKey = state.selectedModelKey.toLowerCase();
     const selection = state.allModels.find(
@@ -627,7 +640,7 @@ export function getTelegramSelectedDetailModel<
     );
     if (selection) return { kind: "selected", selection };
   }
-  return getTelegramModelSelection(state, state.selectedModelIndex?.toString());
+  return indexedSelection;
 }
 
 export function isTelegramModelScoped(
@@ -817,7 +830,6 @@ export function buildTelegramModelCallbackPlan<
   if (modelsMatch(selection.model, params.activeModel)) {
     if (action.action === "pick-selected") {
       focusTelegramModelListPage(params.state, selection.model);
-      return { kind: "update-menu", text: `Model: ${selection.model.id}` };
     }
     return {
       kind: "refresh-status",

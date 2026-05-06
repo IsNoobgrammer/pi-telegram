@@ -836,16 +836,11 @@ test("Agent end runtime sends proactive local result", async () => {
     sendTextReply: async () => {},
     sendQueuedAttachments: async () => {},
     getDefaultChatId: () => 7,
-    consumeProactiveReplyToMessageId: (chatId) => {
-      events.push(`consume:${chatId}`);
-      return undefined;
-    },
     isProactivePushEnabled: () => true,
   });
   assert.deepEqual(events, [
     "reset",
     "status",
-    "consume:7",
     "markdown:7:undefined:done",
     "dispatch",
   ]);

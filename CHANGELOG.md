@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.9.1: Model Detail Hotfix
+
+- `[Model Menu]` Detail-mode activation now preserves scoped `thinkingLevel` by resolving the selected scoped entry before falling back to the unscoped model list. Impact: scoped model shortcuts opened through the detail submenu keep their reasoning/thinking level.
+- `[Model Menu]` Activating an already active model from the detail submenu now still runs the refresh path that applies scoped thinking changes while returning to the model list. Impact: tapping Active can still correct the thinking level instead of becoming a no-op.
+- `[Proactive Push]` Removed the unused proactive reply-target store and always sends proactive local-result pushes without `reply_to_message_id`. Impact: the runtime no longer carries dead state for a target-capture behavior that does not exist yet.
+- `[Queue Reactions]` Added `🔥` as a priority reaction and `🗑` as a queue-removal reaction. Impact: the intuitive fire/removal gestures now work alongside the existing reaction controls.
+- `[Docs]` Updated the status-bar example to match the compact active/queued display.
+- `[Package]` Bumped package metadata to `0.9.1` and kept the lockfile in sync.
+
 ## 0.9.0: Hidden Settings And Proactive Push
 
 - `[Settings Menu]` Added hidden Telegram `/settings` with a proactive push checkbox detail submenu plus `/telegram-settings` in the terminal. Impact: operators can see green/black binary flag state, use green/black/yellow On/Off checkbox controls from Telegram, and toggle the same proactive push flag locally without adding a visible bot-command entry.
