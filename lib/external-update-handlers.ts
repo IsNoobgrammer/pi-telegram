@@ -41,12 +41,34 @@ export interface TelegramExternalUpdateRegistry {
 
 const REGISTRY_KEY = "__piTelegramExternalUpdateRegistry__";
 
+/**
+ * Validate that a value on `globalThis` matches the full v1 registry contract.
+ *
+ * pi-telegram's polling runtime invokes `dispatch`, so a partial object that
+ * only carries `version` and `add` (which an early draft of the zero-coupling
+ * docs showed) would silently break the first update. We treat any object
+ * tagged `version === 1` but missing required methods as malformed and
+ * replace it with a fresh, fully-formed registry. Layered extensions that
+ * follow the full documented shape are unaffected; ones that don't lose any
+ * handlers they registered against the malformed object, which is the
+ * desired fail-loud-during-development behavior.
+ */
+function isValidV1Registry(
+  candidate: unknown,
+): candidate is TelegramExternalUpdateRegistry {
+  if (!candidate || typeof candidate !== "object") return false;
+  const r = candidate as Partial<TelegramExternalUpdateRegistry>;
+  return (
+    r.version === 1 &&
+    typeof r.add === "function" &&
+    typeof r.dispatch === "function"
+  );
+}
+
 function getOrCreateRegistry(): TelegramExternalUpdateRegistry {
   const g = globalThis as Record<string, unknown>;
-  const existing = g[REGISTRY_KEY] as
-    | TelegramExternalUpdateRegistry
-    | undefined;
-  if (existing && existing.version === 1) return existing;
+  const existing = g[REGISTRY_KEY];
+  if (isValidV1Registry(existing)) return existing;
   const handlers = new Set<TelegramExternalUpdateInterceptor>();
   const registry: TelegramExternalUpdateRegistry = {
     version: 1,

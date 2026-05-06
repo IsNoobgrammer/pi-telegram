@@ -165,6 +165,115 @@ test("createTelegramInterceptedHandleUpdate calls defaultHandle when no intercep
   clearGlobalRegistry();
 });
 
+test("Pre-existing docs-style registry missing 'dispatch' is replaced with a valid one", async () => {
+  // Simulate a layered extension that loaded first and installed an early
+  // draft of the zero-coupling registry shape (only `version` and `add`).
+  // pi-telegram must not reuse it as-is, because its polling runtime calls
+  // `dispatch` on whatever it finds and would crash on the first update.
+  clearGlobalRegistry();
+  const docsHandlers = new Set<TelegramExternalUpdateInterceptor>();
+  const docsStyle = {
+    version: 1,
+    add(handler: TelegramExternalUpdateInterceptor) {
+      docsHandlers.add(handler);
+      return () => docsHandlers.delete(handler);
+    },
+    // dispatch deliberately missing
+  };
+  (globalThis as Record<string, unknown>)[REGISTRY_KEY] = docsStyle;
+
+  const registry = getTelegramExternalUpdateRegistry();
+  assert.notEqual(registry, docsStyle as unknown);
+  assert.equal(registry.version, 1);
+  assert.equal(typeof registry.add, "function");
+  assert.equal(typeof registry.dispatch, "function");
+  // Polling loop must succeed against the replacement registry.
+  const verdict = await registry.dispatch({ update_id: 1 });
+  assert.equal(verdict, "pass");
+  // Replacement is now the canonical registry on globalThis.
+  assert.equal(getGlobalRegistry(), registry);
+  clearGlobalRegistry();
+});
+
+test("Pre-existing malformed registry (wrong types) is replaced", async () => {
+  clearGlobalRegistry();
+  const malformed = {
+    version: 1,
+    add: "not a function",
+    dispatch: 42,
+  };
+  (globalThis as Record<string, unknown>)[REGISTRY_KEY] = malformed;
+
+  const registry = getTelegramExternalUpdateRegistry();
+  assert.notEqual(registry, malformed as unknown);
+  assert.equal(typeof registry.add, "function");
+  assert.equal(typeof registry.dispatch, "function");
+  const verdict = await registry.dispatch({ update_id: 1 });
+  assert.equal(verdict, "pass");
+  clearGlobalRegistry();
+});
+
+test("Pre-existing registry with future version is replaced (v1 runtime, v2 squatter)", () => {
+  clearGlobalRegistry();
+  const futureShape = {
+    version: 2,
+    add: () => () => {},
+    dispatch: async () => "pass" as const,
+  };
+  (globalThis as Record<string, unknown>)[REGISTRY_KEY] = futureShape;
+
+  const registry = getTelegramExternalUpdateRegistry();
+  assert.notEqual(registry, futureShape as unknown);
+  assert.equal(registry.version, 1);
+  clearGlobalRegistry();
+});
+
+test("Pre-existing fully-formed v1 registry from a layered extension is reused", async () => {
+  // Documented happy path: a layered extension implements the full v1
+  // contract (including `dispatch`) before pi-telegram loads. Both sides
+  // must converge on the same object so handlers registered through either
+  // path see the same updates.
+  clearGlobalRegistry();
+  const handlers = new Set<TelegramExternalUpdateInterceptor>();
+  const layered: TelegramExternalUpdateRegistry = {
+    version: 1,
+    add(handler) {
+      handlers.add(handler);
+      return () => handlers.delete(handler);
+    },
+    async dispatch(update) {
+      for (const handler of handlers) {
+        const r = await handler(update);
+        if (r === "consume") return "consume";
+      }
+      return "pass";
+    },
+  };
+  (globalThis as Record<string, unknown>)[REGISTRY_KEY] = layered;
+
+  const registry = getTelegramExternalUpdateRegistry();
+  assert.equal(registry, layered);
+
+  const seen: unknown[] = [];
+  const off = onTelegramUpdate((update) => {
+    seen.push(update);
+    return "pass";
+  });
+  await registry.dispatch({ update_id: 1 });
+  assert.deepEqual(seen, [{ update_id: 1 }]);
+  off();
+  clearGlobalRegistry();
+});
+
+test("Pre-existing non-object value at registry key is replaced", () => {
+  clearGlobalRegistry();
+  (globalThis as Record<string, unknown>)[REGISTRY_KEY] = "not an object";
+  const registry = getTelegramExternalUpdateRegistry();
+  assert.equal(registry.version, 1);
+  assert.equal(typeof registry.dispatch, "function");
+  clearGlobalRegistry();
+});
+
 test("createTelegramInterceptedHandleUpdate accepts an explicit registry override", async () => {
   clearGlobalRegistry();
   const seen: unknown[] = [];

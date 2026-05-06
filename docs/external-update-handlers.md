@@ -81,27 +81,68 @@ off();
 
 When the layered extension prefers no `import` from `@llblab/pi-telegram` (so
 load order between the two extensions does not matter, and either can be
-installed first):
+installed first), it must implement the **full v1 registry contract**, not
+just `version` and `add`. pi-telegram's polling runtime calls `dispatch` on
+whatever object it finds at `globalThis.__piTelegramExternalUpdateRegistry__`,
+so a partial object would silently break the first update.
+
+pi-telegram defensively re-creates the registry if the object on `globalThis`
+is missing `add` or `dispatch` (validated as `version === 1`,
+`typeof add === "function"`, `typeof dispatch === "function"`). Handlers
+registered against a malformed object are dropped — make sure your bootstrap
+implements all three fields.
 
 ```ts
+type PiTelegramVerdict =
+  | "consume"
+  | "pass"
+  | void
+  | Promise<"consume" | "pass" | void>;
+type PiTelegramInterceptor = (update: unknown) => PiTelegramVerdict;
+
 interface PiTelegramExternalUpdateRegistry {
   readonly version: 1;
-  add: (
-    handler: (update: unknown) =>
-      | "consume"
-      | "pass"
-      | void
-      | Promise<"consume" | "pass" | void>,
-  ) => () => void;
+  add: (handler: PiTelegramInterceptor) => () => void;
+  // Required: pi-telegram's polling loop calls this on every update.
+  dispatch: (update: unknown) => Promise<"consume" | "pass">;
 }
 
 const REGISTRY_KEY = "__piTelegramExternalUpdateRegistry__";
 
 function getOrCreateRegistry(): PiTelegramExternalUpdateRegistry {
   const g = globalThis as Record<string, unknown>;
-  // Self-bootstrap so install order does not matter.
-  // pi-telegram will reuse this exact object when it loads.
-  // …implementation matches lib/external-update-handlers.ts…
+  const existing = g[REGISTRY_KEY] as
+    | PiTelegramExternalUpdateRegistry
+    | undefined;
+  if (
+    existing &&
+    existing.version === 1 &&
+    typeof existing.add === "function" &&
+    typeof existing.dispatch === "function"
+  ) {
+    return existing;
+  }
+  const handlers = new Set<PiTelegramInterceptor>();
+  const registry: PiTelegramExternalUpdateRegistry = {
+    version: 1,
+    add(handler) {
+      handlers.add(handler);
+      return () => handlers.delete(handler);
+    },
+    async dispatch(update) {
+      for (const handler of handlers) {
+        try {
+          const result = await handler(update);
+          if (result === "consume") return "consume";
+        } catch {
+          // Never break polling because of an interceptor error.
+        }
+      }
+      return "pass";
+    },
+  };
+  g[REGISTRY_KEY] = registry;
+  return registry;
 }
 
 const off = getOrCreateRegistry().add((update) => {
