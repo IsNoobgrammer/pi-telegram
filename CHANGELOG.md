@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased: Proxy Support
+
+- `[Telegram API]` Introduced `TELEGRAM_API_BASE` constant for the Bot API base URL. Impact: centralizes the endpoint in one place and prepares for potential future URL changes.
+- `[Telegram API]` Added documentation for Node.js native HTTP/HTTPS proxy support via `HTTPS_PROXY`, `HTTP_PROXY`, and `NO_PROXY` environment variables (available since Node.js 20.18+, enabled by default in Node.js 22+). Impact: users in restricted regions can route traffic through proxies without adding runtime dependencies or configuration flags. SOCKS5 is explicitly out of scope for the zero-dependency core.
+- `[Docs]` Added Step 5 ("Configure Proxy") to `README.md`.
+
 ## 0.9.5: Telegram Delivery Resilience Hotfix
 
 - `[Preview Delivery]` Preview flush failures from Telegram transport errors such as `fetch failed` / `ECONNRESET` are now caught and recorded as runtime diagnostics instead of escaping from the preview pipeline. Impact: transient Telegram connectivity failures no longer crash the extension during streamed preview edits.

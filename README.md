@@ -75,6 +75,22 @@ The bridge is session-local: only one π instance polls Telegram at a time. `/te
 
 The first user to message the bot becomes the exclusive owner of the bridge. The extension will only accept messages from this user.
 
+### 5. (Optional) Configure Proxy
+
+If `api.telegram.org` is blocked or unreachable in your region, you can route traffic through an HTTP/HTTPS proxy using Node.js native proxy support (available since Node.js 20.18+, enabled by default in Node.js 22+):
+
+```bash
+export HTTPS_PROXY="http://127.0.0.1:8083"
+export HTTP_PROXY="http://127.0.0.1:8083"
+export NO_PROXY="localhost,127.0.0.1"
+
+pi
+```
+
+No additional dependencies or configuration flags are required. Native `fetch` reads `HTTP_PROXY` and `HTTPS_PROXY` from the environment automatically.
+
+SOCKS5 is not supported in the zero-dependency core. For SOCKS5 proxies, use a local HTTP-to-SOCKS tunnel (e.g., `proxychains pi` or `tun2socks`).
+
 ## Usage
 
 Once paired, simply chat with your bot in Telegram. All text, images, and files are forwarded to π.

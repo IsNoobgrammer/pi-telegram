@@ -12,6 +12,8 @@ import { join, resolve } from "node:path";
 import { Readable, Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
 
+export const TELEGRAM_API_BASE = "https://api.telegram.org";
+
 export const TELEGRAM_FILE_MAX_BYTES = 50 * 1024 * 1024;
 
 export function getTelegramInboundFileByteLimitFromEnv(
@@ -513,7 +515,7 @@ export async function callTelegram<TResponse>(
   return callTelegramWithRetry(
     method,
     async () =>
-      fetch(`https://api.telegram.org/bot${configuredBotToken}/${method}`, {
+      fetch(`${TELEGRAM_API_BASE}/bot${configuredBotToken}/${method}`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(body),
@@ -533,7 +535,7 @@ export async function fetchTelegramBotIdentity(
   fetchImpl: typeof fetch = fetch,
 ): Promise<TelegramBotIdentityResponse> {
   const response = await fetchImpl(
-    `https://api.telegram.org/bot${botToken}/getMe`,
+    `${TELEGRAM_API_BASE}/bot${botToken}/getMe`,
   );
   return response.json() as Promise<TelegramBotIdentityResponse>;
 }
@@ -558,7 +560,7 @@ export async function callTelegramMultipart<TResponse>(
       }
       form.set(fileField, fileBlob, fileName);
       return fetch(
-        `https://api.telegram.org/bot${configuredBotToken}/${method}`,
+        `${TELEGRAM_API_BASE}/bot${configuredBotToken}/${method}`,
         {
           method: "POST",
           body: form,
@@ -591,7 +593,7 @@ export async function downloadTelegramFile(
     `${randomUUID()}-${sanitizeFileName(suggestedName)}`,
   );
   const response = await fetch(
-    `https://api.telegram.org/file/bot${configuredBotToken}/${file.file_path}`,
+    `${TELEGRAM_API_BASE}/file/bot${configuredBotToken}/${file.file_path}`,
     { signal: options?.signal },
   );
   if (!response.ok) {
