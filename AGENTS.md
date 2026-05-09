@@ -7,6 +7,7 @@
 - `Boundary Clarity`: Separate Telegram transport concerns, π integration concerns, rendering behavior, and release/documentation state
 - `Progressive Enhancement + Graceful Degradation`: Prefer behavior that upgrades automatically when richer runtime context exists, but always preserves a useful fallback path when it does not
 - `Runtime Safety`: Prefer queue and rendering behavior that fails predictably over clever behavior that can desynchronize the Telegram bridge from π session state
+- `Pi-Native Extensibility`: `pi-telegram` should inherit π's own extension philosophy. It is not only a Telegram adapter; it should become a small, convenient, composable Telegram shell for π extensions, where new capabilities plug into stable contracts instead of forking polling, transport, or menu ownership.
 
 ## 1. Concept
 

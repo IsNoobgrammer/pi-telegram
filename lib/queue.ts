@@ -1023,20 +1023,28 @@ export async function handleTelegramAgentEndRuntime<
   if (finalText) deps.setPreviewPendingText(finalText);
   if (!finalText && hasOutboundArtifacts) await deps.clearPreview(turn.chatId);
   if (endPlan.kind === "text" && finalText) {
-    const finalized = await deps.finalizeMarkdownPreview(
-      turn.chatId,
-      finalText,
-      turn.replyToMessageId,
-      { replyMarkup },
-    );
-    if (!finalized) {
-      await deps.clearPreview(turn.chatId);
-      await deps.sendMarkdownReply(
+    try {
+      const finalized = await deps.finalizeMarkdownPreview(
         turn.chatId,
-        turn.replyToMessageId,
         finalText,
+        turn.replyToMessageId,
         { replyMarkup },
       );
+      if (!finalized) {
+        await deps.clearPreview(turn.chatId);
+        await deps.sendMarkdownReply(
+          turn.chatId,
+          turn.replyToMessageId,
+          finalText,
+          { replyMarkup },
+        );
+      }
+    } catch (error) {
+      deps.recordRuntimeEvent?.("delivery", error, {
+        phase: "final-text",
+        chatId: turn.chatId,
+        replyToMessageId: turn.replyToMessageId,
+      });
     }
   }
   if (outboundReply && deps.sendOutboundReplyArtifacts) {

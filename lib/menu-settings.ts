@@ -111,7 +111,6 @@ export function buildProactivePushSettingsText(): string {
     PROACTIVE_PUSH_SETTINGS_TITLE,
     "",
     "Send successful local π task results to Telegram when the bridge is connected.",
-    "Default: off. Persists until disabled or removed from config.",
   ].join("\n");
 }
 

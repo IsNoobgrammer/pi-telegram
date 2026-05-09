@@ -212,6 +212,7 @@ export default function (pi: Pi.ExtensionAPI) {
     sendMessage,
     editMessageText: editTelegramMessageText,
     canSend: lockOwnershipGuard.ownsCurrentProcess,
+    recordRuntimeEvent,
     ...replyTransport,
   });
   const { finalizeMarkdownPreview } =

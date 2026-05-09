@@ -2,4 +2,9 @@
 
 ## Open Work
 
-No open work.
+- Implement Telegram Extension Sections Platform for the 0.10.0 line.
+  - Exit: Runtime registry, main-menu integration, `section:` callback routing, safe section context ports, diagnostics, docs, and at least one small demo/fixture prove ordinary pi extensions can add Telegram menu sections without owning a second poller.
+- Explore always-available outbound Telegram tools for queued artifacts and controls.
+  - Priority: Low.
+  - Idea: Provide tools such as `telegram_attach_file` and `telegram_attach_button` that can be called outside an active Telegram turn, using the paired chat/session as the delivery target when safe.
+  - Exit: Design note defines active-turn versus ambient delivery semantics, safety constraints, failure modes, and whether the current `telegram_attach` contract should stay turn-scoped or gain an ambient companion.

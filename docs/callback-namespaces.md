@@ -20,7 +20,7 @@ myext:page:2
 
 - Use a stable extension-owned namespace, preferably the package or extension name without scope punctuation.
 - Keep the namespace lowercase ASCII: `a-z`, `0-9`, `_`, `-`.
-- Do not use `pi-telegram` owned prefixes: `tgbtn:`, `menu:`, `model:`, `thinking:`, `status:`, `queue:`. Current app navigation uses `menu:`; `status:` remains reserved for legacy/owned status callbacks but is not emitted by current UI.
+- Do not use `pi-telegram` owned prefixes: `tgbtn:`, `menu:`, `model:`, `thinking:`, `status:`, `queue:`, `section:`. Current app navigation uses `menu:`; `status:` remains reserved for legacy/owned status callbacks but is not emitted by current UI. `section:` is reserved for the structured extension-section router documented in [Extension Sections](./extension-sections.md).
 - Keep the full `callback_data` within Telegram's 64-byte limit.
 - Put only opaque ids or small enum values in payloads; do not store secrets, full prompts, or large state.
 - Treat callbacks as untrusted input. Validate namespace, action, and payload before executing side effects.
@@ -34,3 +34,15 @@ If `pi-telegram` receives callback data that is not owned by its built-in prefix
 ```
 
 Layered extensions may intercept that message and handle their own namespace. If no extension handles it, the assistant may see the fallback message and should tell the user the callback was not handled and the environment may be misconfigured.
+
+## Extension sections
+
+[Telegram Extension Sections](./extension-sections.md) are a higher-level UI contract over this namespace rule. A section owns a canonical extension identity such as `@llblab/pi-telegram-explorer`, but its Telegram `callback_data` should use the `pi-telegram` owned `section:` prefix plus a compact token, because Telegram limits callback payloads to 64 bytes.
+
+Conceptual form:
+
+```text
+section:<token>:<action>[:<payload>]
+```
+
+The token maps back to the full section identity inside the section registry. Section authors should not hand-roll `section:` callbacks outside the section context helpers, and ordinary layered extensions should continue using their own namespace plus external handlers or the `[callback]` fallback.

@@ -10,11 +10,11 @@ This document is the local outbound adaptation of the portable [Command Template
 
 An outbound handler is selected by `type`. Text replies and assistant markup map to handler types:
 
-| Source            | Handler type | Telegram action                                    |
-| ----------------- | ------------ | -------------------------------------------------- |
-| Final text reply  | `text`       | Transform text/Markdown before Telegram rendering  |
-| `telegram_voice`  | `voice`      | Generate OGG/Opus and call `sendVoice`             |
-| `telegram_button` | Built-in     | Attach an inline keyboard button to the final text |
+| Source | Type | Action |
+| --- | --- | --- |
+| Final text | `text` | Transform before render |
+| `telegram_voice` | `voice` | Generate OGG/Opus |
+| `telegram_button` | Built-in | Attach inline button |
 
 Configured command-template handlers provide `template`. A string is one command; an array is ordered composition. Top-level `args` and `defaults` apply to all composed steps unless a step defines private values. The command-template default timeout applies automatically. `output` selects the primary artifact path when the handler produces a file instead of stdout text. Legacy configs may still use `pipe`, but `template: [...]` is the preferred standard shape.
 
@@ -96,13 +96,13 @@ The bridge strips the comment from Telegram text. On `agent_end`, it maps each `
 
 Voice outbound handlers receive these runtime placeholders:
 
-| Placeholder | Value                                                    |
-| ----------- | -------------------------------------------------------- |
-| `{text}`    | Voice text from body, `text="..."`, or colon shorthand |
-| `{lang}`    | Optional markup override such as `lang=ru`               |
-| `{rate}`    | Optional markup override such as `rate=+30%`             |
-| `{mp3}`     | Flat temp artifact path under `~/.pi/agent/tmp/telegram` |
-| `{ogg}`     | Flat temp artifact path under `~/.pi/agent/tmp/telegram` |
+| Placeholder | Value |
+| --- | --- |
+| `{text}` | Voice text from body, attr, or colon form |
+| `{lang}` | Optional override, e.g. `lang=ru` |
+| `{rate}` | Optional override, e.g. `rate=+30%` |
+| `{mp3}` | Temp MP3 path under agent temp |
+| `{ogg}` | Temp OGG path under agent temp |
 
 Temp artifacts use unique flat names such as `<uuid>-voice.mp3` and `<uuid>-voice.ogg`. The bridge does not create per-handler directory trees.
 

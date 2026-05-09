@@ -87,8 +87,8 @@ Use these inside the Telegram DM with your bot:
 - **`/compact`**: Start session compaction (only works when the session is idle).
 - **`/next`**: Dispatch the next queued turn (aborts π first if busy).
 - **`/continue`**: Enqueue a priority `continue` prompt. It waits like normal Telegram work when π is busy and can trigger prompt/skill handling that listens for `continue`.
-- **`/stop`**: Abort the active run and clear all waiting Telegram queue items.
 - **`/abort`**: Abort the active run without touching the queue.
+- **`/stop`**: Abort the active run and clear all waiting Telegram queue items.
 
 Prompt-template commands: π prompt templates are mapped to Telegram-safe aliases (`fix-tests.md` becomes `/fix_tests`) and shown as compact command-only rows between the built-in commands and status rows in `/start`. They are not registered in the Telegram bot command menu, keeping the bot menu focused on bridge controls. Sending `/template_name args` from Telegram expands the matching π prompt-template file and queues the expanded prompt like normal Telegram work.
 

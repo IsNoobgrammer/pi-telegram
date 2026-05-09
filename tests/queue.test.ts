@@ -812,6 +812,54 @@ test("Agent end runtime resets state, finalizes replies, sends attachments, and 
   ]);
 });
 
+test("Agent end runtime records final delivery failures and dispatches", async () => {
+  const events: string[] = [];
+  const turn: PendingTelegramTurn = createQueueTestPromptTurn();
+  await handleTelegramAgentEndRuntime({
+    turn,
+    assistant: { text: "final" },
+    preserveQueuedTurnsAsHistory: false,
+    resetRuntimeState: () => {
+      events.push("reset");
+    },
+    updateStatus: () => {
+      events.push("status");
+    },
+    dispatchNextQueuedTelegramTurn: () => {
+      events.push("dispatch");
+    },
+    clearPreview: async () => {
+      events.push("clear");
+    },
+    setPreviewPendingText: (text) => {
+      events.push(`preview:${text}`);
+    },
+    finalizeMarkdownPreview: async () => {
+      throw new Error("fetch failed");
+    },
+    sendMarkdownReply: async () => {
+      events.push("unexpected:markdown");
+    },
+    sendTextReply: async () => {
+      events.push("unexpected:text");
+    },
+    sendQueuedAttachments: async () => {
+      events.push("attachments");
+    },
+    recordRuntimeEvent: (category, _error, details) => {
+      events.push(`${category}:${details?.phase}`);
+    },
+  });
+  assert.deepEqual(events, [
+    "reset",
+    "status",
+    "preview:final",
+    "delivery:final-text",
+    "attachments",
+    "dispatch",
+  ]);
+});
+
 test("Agent end runtime sends proactive local result", async () => {
   const events: string[] = [];
   await handleTelegramAgentEndRuntime({

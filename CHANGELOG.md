@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.9.5: Telegram Delivery Resilience Hotfix
+
+- `[Preview Delivery]` Preview flush failures from Telegram transport errors such as `fetch failed` / `ECONNRESET` are now caught and recorded as runtime diagnostics instead of escaping from the preview pipeline. Impact: transient Telegram connectivity failures no longer crash the extension during streamed preview edits.
+- `[Final Delivery]` Final Markdown preview replacement now catches Telegram transport failures and returns a normal fallback signal; the agent-end delivery path records final-text delivery failures and continues cleanup, attachment handling, and queue dispatch. Impact: a failed `editMessageText` at `agent_end` no longer breaks the bridge lifecycle or blocks the next queued Telegram turn.
+- `[Diagnostics]` Preview and final delivery failures now flow through the runtime event recorder with compact phase metadata. Impact: `/telegram-status` can show recent transport failures without dumping noisy stack traces into the extension runner.
+- `[Tests]` Added preview and queue regressions for non-fatal Telegram transport failures during preview flush and final delivery.
+- `[Extension Sections Draft]` Added a draft design note for pi-native Telegram extension sections, reserved the future `section:` callback prefix, linked the draft from docs, and recorded the project philosophy that `pi-telegram` should inherit π's extensibility model as a shared Telegram shell for loaded extensions. Impact: the future 0.10.0 extension platform direction is documented without exposing a stable API yet.
+- `[Docs Formatting]` Normalized project Markdown so prose paragraphs stay as single logical lines and Markdown tables remain narrow instead of using artificial hard wraps. Impact: editors and viewers can handle visual wrapping naturally while fixed-width structures stay readable.
+- `[Settings Copy]` Tightened the proactive-push settings text by removing redundant persistence/default wording.
+
 ## 0.9.4: Temp Dir And Command Template Hotfix
 
 - `[Telegram Temp Dir]` Default Telegram API temp files now respect `PI_CODING_AGENT_DIR`, falling back to `~/.pi/agent` when the env var is unset. Impact: sandboxed or relocated agent dirs no longer force Telegram downloads through the default home-directory path.

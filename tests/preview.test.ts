@@ -119,6 +119,13 @@ function createPreviewRuntimeHarness(state?: {
         return messageId;
       },
       canSend: undefined as undefined | (() => boolean),
+      recordRuntimeEvent: (
+        category: string,
+        _error: unknown,
+        details?: Record<string, unknown>,
+      ) => {
+        events.push(`${category}:${details?.phase}`);
+      },
     },
   };
 }
@@ -747,6 +754,41 @@ test("Preview runtime falls back to editable plain messages when draft delivery 
   assert.equal(harness.getState()?.messageId, 77);
   assert.equal(harness.getState()?.lastSentStrategy, "plain");
   assert.equal(harness.getDraftSupport(), "unsupported");
+});
+
+test("Preview runtime records transport failures without throwing", async () => {
+  const harness = createPreviewRuntimeHarness({
+    mode: "message",
+    messageId: 77,
+    pendingText: "next",
+    lastSentText: "old",
+  });
+  harness.setDraftSupport("unsupported");
+  const deps = {
+    ...harness.deps,
+    renderTelegramMessage: () => [],
+    editMessageText: async () => {
+      throw new Error("fetch failed");
+    },
+  };
+  await flushTelegramPreview(7, deps);
+  assert.deepEqual(harness.events, ["preview:flush"]);
+});
+
+test("Preview runtime records final markdown failures and returns false", async () => {
+  const harness = createPreviewRuntimeHarness({
+    mode: "draft",
+    pendingText: "",
+    lastSentText: "",
+  });
+  const deps = {
+    ...harness.deps,
+    sendRenderedChunks: async () => {
+      throw new Error("fetch failed");
+    },
+  };
+  assert.equal(await finalizeTelegramMarkdownPreview(7, "final", deps), false);
+  assert.deepEqual(harness.events, ["preview:finalize-markdown"]);
 });
 
 test("Preview runtime serializes overlapping flush requests", async () => {

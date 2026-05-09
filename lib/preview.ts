@@ -90,6 +90,11 @@ export interface TelegramPreviewRuntimeDeps<
     options?: { replyMarkup?: TReplyMarkup },
   ) => Promise<number | undefined>;
   canSend?: () => boolean;
+  recordRuntimeEvent?: (
+    category: string,
+    error: unknown,
+    details?: Record<string, unknown>,
+  ) => void;
 }
 
 export interface TelegramPreviewActiveTurn {
@@ -191,6 +196,11 @@ export interface TelegramPreviewControllerDeps<
     ms: number,
   ) => ReturnType<typeof setTimeout>;
   clearTimer?: (timer: ReturnType<typeof setTimeout>) => void;
+  recordRuntimeEvent?: (
+    category: string,
+    error: unknown,
+    details?: Record<string, unknown>,
+  ) => void;
 }
 
 export interface TelegramPreviewController<
@@ -421,6 +431,7 @@ export function createTelegramPreviewController<
       ),
     editRenderedMessage: deps.editRenderedMessage,
     canSend: deps.canSend,
+    recordRuntimeEvent: deps.recordRuntimeEvent,
   });
   return {
     getState: () => state,
@@ -645,7 +656,16 @@ export async function flushTelegramPreview<
   state.flushPromise = (async () => {
     do {
       state.flushRequested = false;
-      await performTelegramPreviewFlush(chatId, state, deps);
+      try {
+        await performTelegramPreviewFlush(chatId, state, deps);
+      } catch (error) {
+        deps.recordRuntimeEvent?.("preview", error, {
+          phase: "flush",
+          chatId,
+          messageId: state.messageId,
+        });
+        break;
+      }
     } while (deps.getState() === state && state.flushRequested);
   })();
   try {
@@ -704,13 +724,22 @@ export async function finalizeTelegramMarkdownPreview<
     await clearTelegramPreview(chatId, deps);
     return false;
   }
-  if (state.mode === "draft") {
-    await deps.sendRenderedChunks(chatId, chunks, options);
-    await clearTelegramPreview(chatId, deps);
+  try {
+    if (state.mode === "draft") {
+      await deps.sendRenderedChunks(chatId, chunks, options);
+      await clearTelegramPreview(chatId, deps);
+      return true;
+    }
+    if (state.messageId === undefined) return false;
+    await deps.editRenderedMessage(chatId, state.messageId, chunks, options);
+    deps.setState(undefined);
     return true;
+  } catch (error) {
+    deps.recordRuntimeEvent?.("preview", error, {
+      phase: "finalize-markdown",
+      chatId,
+      messageId: state.messageId,
+    });
+    return false;
   }
-  if (state.messageId === undefined) return false;
-  await deps.editRenderedMessage(chatId, state.messageId, chunks, options);
-  deps.setState(undefined);
-  return true;
 }
