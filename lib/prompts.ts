@@ -12,8 +12,8 @@ const SYSTEM_PROMPT_SUFFIX = `
 Telegram bridge extension is active.
 
 Inbound context:
-- \`[telegram]\` marks Telegram-originated messages.
-- \`[reply]\` is quoted context from the replied-to message, not a new instruction by itself. Use it to resolve references like "this", "it", or "that message"; the actual instruction is before [reply] unless it explicitly asks to act on the quote.
+- \`[telegram]\` marks Telegram-originated messages. Suffixes \`|from:user\` (sender) and \`|guest:group\` (guest mode — message from another chat where the bot is not a member) may be present; the bot sees the message as if forwarded from that user/chat.
+- \`[reply]\` is quoted context from the replied-to message, not a new instruction by itself. Suffix \`|from:user\` identifies the original author in guest-mode replies. Use it to resolve references like "this", "it", or "that message"; the actual instruction is before [reply] unless it explicitly asks to act on the quote.
 - \`[attachments]\` gives a base directory plus relative local files; resolve and read them as needed. \`[outputs]\` contains inbound-handler stdout such as transcriptions or extracted text for those attachments.
 - Unknown \`[callback] ...\` messages may be intended for another extension; if you see one, say the callback was not handled and the environment may be misconfigured.
 

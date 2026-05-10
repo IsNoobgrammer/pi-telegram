@@ -6,6 +6,7 @@
 
 import * as OutboundHandlers from "./outbound-handlers.ts";
 import * as Commands from "./commands.ts";
+import { readFile } from "node:fs/promises";
 import type { TelegramConfigStore } from "./config.ts";
 import type { TelegramInboundHandlerRuntime } from "./inbound-handlers.ts";
 import * as Media from "./media.ts";
@@ -371,7 +372,71 @@ export function createTelegramInboundRouteRuntime<
     ctx: TContext,
   ): Promise<void> => {
     const text = guestMessage.text ?? "";
+    const gm = guestMessage as unknown as Record<string, unknown>;
+    // Build telegram prefix with guest context
+    const fromRaw = gm.from as Record<string, unknown> | undefined;
+    const fromName =
+      (fromRaw?.username as string) ||
+      (fromRaw?.first_name as string) ||
+      "";
+    const chatRaw = gm.chat as Record<string, unknown>;
+    const chatTitle = chatRaw?.title as string | undefined;
+    const chatType = chatRaw?.type as string;
+    const prefixParts = ["telegram"];
+    if (fromName) prefixParts.push(`from:${fromName}`);
+    if (chatType !== "private" && chatTitle) {
+      prefixParts.push(`guest:${chatTitle}`);
+    }
+    const telegramPrefix = `[${prefixParts.join("|")}]`;
+    // Extract reply context
+    const replyMsg = gm.reply_to_message as Record<string, unknown> | undefined;
+    const replyText =
+      replyMsg
+        ? ((replyMsg.text as string) || (replyMsg.caption as string) || "").trim()
+        : "";
+    const replyFrom =
+      replyMsg
+        ? (replyMsg.from as Record<string, unknown> | undefined)?.username as string | undefined
+        : undefined;
+    // Download files, run inbound handlers
+    const guestMsg = guestMessage as unknown as Media.TelegramMediaMessage;
+    const files = await Media.downloadTelegramMessageFiles([guestMsg], {
+      downloadFile: deps.downloadFile,
+    });
+    const processed = await deps.inboundHandlerRuntime.process(files, text, ctx);
+    let rawText = processed.rawText || text;
+    // Append reply context after handler processing
+    if (replyText) {
+      const replyBlock = replyFrom
+        ? `[reply|from:${replyFrom}] ${replyText}`
+        : `[reply] ${replyText}`;
+      rawText = `${rawText}\n\n${replyBlock}`;
+    }
+    const promptText = Turns.buildTelegramTurnPrompt({
+      telegramPrefix,
+      rawText,
+      files,
+      promptFiles: processed.promptFiles,
+      handlerOutputs: processed.handlerOutputs,
+    });
     const order = deps.bridgeRuntime.queue.allocateItemOrder();
+    const content: Queue.TelegramPromptContent[] = [
+      { type: "text", text: promptText },
+    ];
+    for (const file of processed.promptFiles) {
+      if (file.isImage && file.mimeType) {
+        try {
+          const buffer = await readFile(file.path);
+          content.push({
+            type: "image",
+            data: Buffer.from(buffer).toString("base64"),
+            mimeType: file.mimeType,
+          });
+        } catch {
+          // skip unreadable files
+        }
+      }
+    }
     const guestTurn: Queue.PendingTelegramTurn = {
       kind: "prompt",
       chatId: 0,
@@ -382,9 +447,15 @@ export function createTelegramInboundRouteRuntime<
       queueLane: "default",
       laneOrder: order,
       queuedAttachments: [],
-      content: [{ type: "text", text }],
-      historyText: text,
-      statusSummary: Turns.truncateTelegramQueueSummary(text),
+      content,
+      historyText: Turns.formatTelegramTurnStatusSummary(
+        processed.rawText || text,
+        processed.promptFiles,
+        processed.handlerOutputs,
+      ),
+      statusSummary: Turns.truncateTelegramQueueSummary(
+        processed.rawText || text,
+      ),
     };
     const items = deps.telegramQueueStore.getQueuedItems();
     deps.telegramQueueStore.setQueuedItems(

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.9.8: Guest Mode Context
+
+- `[Guest Mode]` Extended the [telegram] prefix with |from:user (sender) and |guest:GroupName (source chat for group guest messages) so the agent sees who sent the message and where from. Private guest chats omit the guest: suffix.
+- `[Guest Mode]` Added |from:user to the [reply] block so the agent knows the original author of a replied-to message in guest mode.
+- `[Guest Mode]` Formatted guest prompt text identically to regular DMs through buildTelegramTurnPrompt, including [attachments] and [outputs] sections with file downloads and inbound handler processing.
+- `[Prompts]` Added compact agent guidance explaining guest-mode prefix suffixes (|from:, |guest:) and reply-from context.
+
 ## 0.9.7: Bot API 10.0 Alignment
 
 - `[Dependencies]` Migrated peer dependencies and imports from `@mariozechner/*` to `@earendil-works/*` (`pi-agent-core`, `pi-ai`, `pi-coding-agent`). Impact: the extension now tracks the new `@earendil-works` package scope; transitive `@mariozechner` packages remain in the lockfile until their upstreams migrate.

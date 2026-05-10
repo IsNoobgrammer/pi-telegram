@@ -161,6 +161,7 @@ export interface TelegramGuestMessage {
   guest_query_id: string;
   guest_bot_caller_user?: TelegramUser;
   guest_bot_caller_chat?: TelegramChat;
+  reply_to_message?: TelegramMessage;
 }
 
 export interface TelegramUpdate {

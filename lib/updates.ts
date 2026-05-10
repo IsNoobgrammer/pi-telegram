@@ -136,6 +136,7 @@ export interface TelegramGuestMessage {
   from?: TelegramUser;
   message_id?: number;
   text?: string;
+  reply_to_message?: TelegramUpdateMessage;
 }
 
 export interface TelegramUpdateRouting {
