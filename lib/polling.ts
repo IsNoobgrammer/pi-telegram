@@ -208,7 +208,7 @@ export function startTelegramPollingRuntime<TContext>(
   const promise = deps.runPollLoop(ctx, controller.signal).finally(() => {
     deps.setPollingPromise(undefined);
     deps.setPollingController(undefined);
-    deps.updateStatus(ctx);
+    try { deps.updateStatus(ctx); } catch { /* ctx stale after session reload */ }
   });
   deps.setPollingPromise(promise);
   deps.updateStatus(ctx);
@@ -281,10 +281,10 @@ export function createTelegramPollLoopRunner<
       persistConfig: deps.persistConfig,
       handleUpdate: deps.handleUpdate,
       onErrorStatus: (message) => {
-        deps.updateStatus(ctx, message);
+        try { deps.updateStatus(ctx, message); } catch { /* ctx stale after session reload */ }
       },
       onStatusReset: () => {
-        deps.updateStatus(ctx);
+        try { deps.updateStatus(ctx); } catch { /* ctx stale after session reload */ }
       },
       sleep,
       maxUpdateFailures: deps.maxUpdateFailures,
