@@ -261,18 +261,9 @@ export function registerTelegramSection(
 ): () => void {
   const registry = globalThis[SECTION_REGISTRY_KEY];
   if (!registry) {
-    // If no registry is ready yet, we simply can't register.
-    // This should normally not happen in normal usage.
-    try {
-      const record = (globalThis as any)[VOICE_EVENT_RECORDER_KEY];
-      if (typeof record === "function") {
-        record("section-registration", new Error("Registry not ready yet"), {
-          id: section.id,
-        });
-      }
-    } catch {}
-
-    return () => {};
+    throw new Error(
+      "Telegram section registry not available. Is pi-telegram loaded and initialized?",
+    );
   }
 
   return registry.register(section);
