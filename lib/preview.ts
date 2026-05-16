@@ -108,13 +108,7 @@ export interface TelegramPreviewActiveTurn {
   voiceReplyRequired?: boolean;
 }
 
-/**
- * Voice replies should not show live text previews/drafts in Telegram.
- * This helper centralizes the check so it is consistent across preview start and update.
- */
-function shouldSuppressPreviewForVoice(turn: TelegramPreviewActiveTurn | null | undefined): boolean {
-  return !!(turn?.voiceReplyPreferred || turn?.voiceReplyRequired);
-}
+import { shouldSuppressPreviewForVoice } from "./voice.ts";
 
 export interface TelegramAssistantMessagePreviewStartDeps<
   TMessage,

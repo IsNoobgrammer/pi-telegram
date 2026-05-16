@@ -1,7 +1,9 @@
 /**
  * Telegram API transport helpers
  * Zones: telegram transport, filesystem, runtime diagnostics
- * Wraps bot API calls, file downloads, runtime transport binding, and Telegram temp-file cleanup
+ *
+ * Wraps bot API calls, file uploads/downloads (including voice messages),
+ * multipart sending, runtime transport binding, and Telegram temp-file lifecycle.
  */
 
 import { randomUUID } from "node:crypto";
@@ -578,6 +580,12 @@ export async function fetchTelegramBotIdentity(
   return response.json() as Promise<TelegramBotIdentityResponse>;
 }
 
+/**
+ * Low-level helper to send a multipart/form-data request to the Telegram Bot API.
+ * This is the core implementation used for uploading voice messages, photos,
+ * documents, animations, etc. It handles FormData construction, retry logic
+ * (via callTelegramWithRetry), and error recording under the "multipart" category.
+ */
 export async function callTelegramMultipart<TResponse>(
   botToken: string | undefined,
   method: string,
@@ -722,6 +730,12 @@ export function createTelegramBridgeApiRuntime(
   };
   return {
     call: callRecorded,
+
+    /**
+     * Sends a multipart/form-data request (used for sending voice messages,
+     * photos, documents, animations, etc.).
+     * Errors are recorded under the "multipart" category for diagnostics.
+     */
     callMultipart: async (
       method,
       fields,
@@ -744,6 +758,11 @@ export function createTelegramBridgeApiRuntime(
         throw error;
       }
     },
+
+    /**
+     * Downloads a file from the Telegram servers into the local temp directory.
+     * Used for inbound voice messages, photos, documents, etc.
+     */
     downloadFile: async (fileId, suggestedName) => {
       try {
         return await deps.client.downloadFile(
@@ -850,6 +869,11 @@ export function createTelegramBridgeApiRuntime(
   };
 }
 
+/**
+ * Creates a low-level Telegram Bot API client.
+ * This is the main entry point for all direct Bot API communication
+ * (both JSON calls and multipart uploads for files/voice).
+ */
 export function createTelegramApiClient(
   getBotToken: () => string | undefined,
 ): TelegramApiClient {

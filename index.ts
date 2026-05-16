@@ -43,6 +43,7 @@ import * as Shutdown from "./lib/shutdown.ts";
 import * as Setup from "./lib/setup.ts";
 import * as Status from "./lib/status.ts";
 import * as TextGroups from "./lib/text-groups.ts";
+import * as Voice from "./lib/voice.ts";
 
 type ActivePiModel = NonNullable<Pi.ExtensionContext["model"]>;
 type RuntimeTelegramQueueItem = Queue.TelegramQueueItem<Pi.ExtensionContext>;
@@ -51,14 +52,27 @@ export {
   registerTelegramOutboundHandler,
   hasTelegramOutboundHandler,
   getTelegramOutboundProgrammaticHandlers,
+  recordTelegramRuntimeEvent,
+} from "./lib/outbound-handlers.ts";
+
+// Voice Domain (policy, tagging, provider registry, markup parsing)
+// The full Voice surface is re-exported from outbound-handlers.ts (which
+// re-exports the new policy layer from voice.ts for clean ownership in Commit 2).
+export {
   registerTelegramVoiceProvider,
   getTelegramVoiceProviders,
   hasTelegramVoiceProvider,
   clearTelegramVoiceProviders,
-  recordTelegramRuntimeEvent,
+  planTelegramVoiceReply,
+  getTelegramVoiceReplyMode,
+  computeVoiceTurnFlags,
+  isVoiceTurn,
+  shouldSuppressPreviewForVoice,
+  computeVoicePromptContribution,
   type TelegramVoiceProvider,
   type TelegramVoiceTurnView,
   type TelegramVoiceProviderResult,
+  type TelegramVoiceReplyMode,
 } from "./lib/outbound-handlers.ts";
 
 // Extension Section / Menu APIs (Voice Extension Sections and other menus)
@@ -324,9 +338,11 @@ export default function (pi: Pi.ExtensionAPI) {
     editInteractiveMessage,
     sendInteractiveMessage,
     sectionRegistry,
+
+    // Used by the menu/status system to know whether the current turn is a voice reply
     isVoiceReplyActive: function () {
       const turn = activeTurnRuntime.get();
-      return !!(turn?.voiceReplyPreferred || turn?.voiceReplyRequired);
+      return Voice.isVoiceTurn(turn);
     },
   });
 

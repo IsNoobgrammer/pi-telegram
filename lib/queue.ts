@@ -87,10 +87,7 @@ export interface PendingTelegramTurn extends TelegramQueueItemBase {
   voiceReplyRequired?: boolean;
 }
 
-/** Small helper used across queue, turns, and preview to check voice-tagged turns */
-function isVoiceTurn(turn: { voiceReplyPreferred?: boolean; voiceReplyRequired?: boolean } | null | undefined): boolean {
-  return !!(turn?.voiceReplyPreferred || turn?.voiceReplyRequired);
-}
+import { isVoiceTurn } from "./outbound-handlers.ts";
 
 export interface PendingTelegramControlItem<
   TContext = unknown,
