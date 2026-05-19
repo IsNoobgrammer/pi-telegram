@@ -120,7 +120,10 @@ The inline application menu is the primary operator surface. It exposes status, 
 
 Messages sent while π is busy enter the prompt queue and are processed in order. Control actions and model-switch continuation turns use higher-priority lanes so operational commands can resume before normal prompts.
 
-The menu is the primary way to inspect and mutate the queue. Reactions are an extra shortcut when Telegram delivers `message_reaction` updates for the chat: `👍`, `⚡️`, `❤️`, `🕊`, and `🔥` promote waiting work; `👎`, `👻`, `💔`, `💩`, and `🗑` remove it. The same rules apply to text, voice, files, images, and media groups.
+The menu is the primary way to inspect and mutate the queue. Reactions are an extra shortcut when Telegram delivers `message_reaction` updates for the chat. The same rules apply to text, voice, files, images, and media groups:
+
+- Priority shortcuts: `👍`, `⚡️`, `❤️`, `🕊`, and `🔥` promote waiting work.
+- Removal shortcuts: `👎`, `👻`, `💔`, `💩`, and `🗑` remove waiting work from the queue.
 
 ### Streaming and Telegram HTML rendering
 
@@ -203,17 +206,21 @@ import { registerTelegramVoiceSynthesisProvider } from "@llblab/pi-telegram/lib/
 import { recordTelegramRuntimeEvent } from "@llblab/pi-telegram/lib/outbound-handlers.ts";
 
 // Return path only (backward compatible)
-const dispose = registerTelegramVoiceSynthesisProvider(async (text, { lang, rate }) => {
-  const path = await myTTS(text, { language: lang });
-  return path; // must be .ogg or .opus
-});
+const dispose = registerTelegramVoiceSynthesisProvider(
+  async (text, { lang, rate }) => {
+    const path = await myTTS(text, { language: lang });
+    return path; // must be .ogg or .opus
+  },
+);
 
 // Return path + transcript caption
-const dispose2 = registerTelegramVoiceSynthesisProvider(async (text, { lang, rate }) => {
-  const rewritten = rewriteWithSpeechTags(text); // internal TTS optimization
-  const path = await myTTS(rewritten, { language: lang });
-  return { audioPath: path, transcriptText: text };
-});
+const dispose2 = registerTelegramVoiceSynthesisProvider(
+  async (text, { lang, rate }) => {
+    const rewritten = rewriteWithSpeechTags(text); // internal TTS optimization
+    const path = await myTTS(rewritten, { language: lang });
+    return { audioPath: path, transcriptText: text };
+  },
+);
 
 // Surface diagnostics in /telegram-status
 recordTelegramRuntimeEvent("xai-voice", new Error("TTS complete"), {
@@ -240,7 +247,7 @@ Import `registerTelegramSection()` from `@llblab/pi-telegram/lib/extension-secti
 
 ### Time context
 
-`telegram.json` can opt into a compact `[time]` line in Telegram-originated prompts so π has a wall-clock reference for requests such as "today", "now", or scheduling. It is off by default and uses the system timezone; the mode can also be changed from Settings → `🕒 Time`.
+`telegram.json` can opt into a compact `[time]` line in Telegram-originated prompts so π has a wall-clock reference for requests such as "today", "now", or scheduling. It is hidden by default and uses the system timezone; the mode can also be changed from Settings → `🕒 Time injection`.
 
 ```json
 {
@@ -251,7 +258,7 @@ Import `registerTelegramSection()` from `@llblab/pi-telegram/lib/extension-secti
 }
 ```
 
-Modes are `off`, `always`, and `interval`. `interval` is measured in milliseconds and rate-limits the time line per chat in memory, so back-to-back messages do not repeatedly spend context on the same timestamp. When present, `[time]` is the final prompt-context section after attachments, handler outputs, and voice policy.
+Modes are `hidden`, `always`, and `interval`. `hidden` means no time line is added to prompt context. `interval` is measured in milliseconds and rate-limits the time line per chat in memory, so back-to-back messages do not repeatedly spend context on the same timestamp. When present, `[time]` is the final prompt-context section after attachments, handler outputs, and voice policy.
 
 ## Docs
 
@@ -283,6 +290,12 @@ Third-party extensions that integrate with `pi-telegram`:
 
 ```bash
 pi install npm:pi-telegram-tool-status
+```
+
+- [`pi-xai-voice`](https://github.com/luxus/pi-xai-voice) — xAI voice companion for Telegram voice replies through the `pi-telegram` voice provider API.
+
+```bash
+pi install npm:pi-xai-voice
 ```
 
 ## License

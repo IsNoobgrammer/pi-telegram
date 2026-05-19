@@ -11,7 +11,6 @@ import * as Config from "./lib/config.ts";
 import {
   createTelegramExtensionSectionRegistry,
   setGlobalTelegramSectionRegistry,
-  registerTelegramSection,
   type TelegramSectionRegistry,
 } from "./lib/extension-sections.ts";
 import { createTelegramExternalHandleUpdate } from "./lib/external-handlers.ts";
@@ -46,42 +45,6 @@ const VOICE_EVENT_RECORDER_KEY = "__piTelegramVoiceEventRecorder__";
 type ActivePiModel = NonNullable<Pi.ExtensionContext["model"]>;
 type RuntimeTelegramQueueItem = Queue.TelegramQueueItem<Pi.ExtensionContext>;
 
-export {
-  registerTelegramOutboundHandler,
-  hasTelegramOutboundHandler,
-  getTelegramOutboundProgrammaticHandlers,
-  recordTelegramRuntimeEvent,
-} from "./lib/outbound-handlers.ts";
-
-// --- Voice Integration Exports ---
-// Prefer domain imports from ./lib/voice.ts; root exports stay for compatibility.
-export {
-  registerTelegramVoiceSynthesisProvider,
-  getTelegramVoiceSynthesisProviders,
-  hasTelegramVoiceSynthesisProvider,
-  clearTelegramVoiceSynthesisProviders,
-  planTelegramVoiceReply,
-  getTelegramVoiceReplyMode,
-  computeVoiceTurnFlags,
-  isVoiceTurn,
-  shouldSuppressPreviewForVoice,
-  computeVoicePromptContribution,
-  type TelegramVoiceSynthesisProvider,
-  type TelegramVoiceTurnView,
-  type TelegramVoiceSynthesisProviderResult,
-  type TelegramVoiceReplyMode,
-} from "./lib/voice.ts";
-
-// --- Extension Section Exports ---
-export {
-  registerTelegramSection,
-  type TelegramSectionRegistration,
-  type TelegramSectionContext,
-  type TelegramSectionCallbackContext,
-  type TelegramSectionView,
-  type TelegramSectionSettingsRegistration,
-} from "./lib/extension-sections.ts";
-
 // --- Extension Runtime ---
 
 export default function (pi: Pi.ExtensionAPI) {
@@ -99,7 +62,10 @@ export default function (pi: Pi.ExtensionAPI) {
   Config.setGlobalTelegramConfigRuntime({
     updateVoiceConfig(voice) {
       const current = configStore.get();
-      const next = { ...current, voice: { ...(current.voice ?? {}), ...voice } };
+      const next = {
+        ...current,
+        voice: { ...(current.voice ?? {}), ...voice },
+      };
       configStore.set(next);
       void configStore.persist(next);
     },
@@ -137,7 +103,6 @@ export default function (pi: Pi.ExtensionAPI) {
     createTelegramExtensionSectionRegistry();
   setGlobalTelegramSectionRegistry(sectionRegistry);
 
-
   const runtimeEvents = Status.createTelegramRuntimeEventRecorder({
     getBotToken: configStore.getBotToken,
   });
@@ -146,9 +111,8 @@ export default function (pi: Pi.ExtensionAPI) {
     getConfig: Config.createTelegramTimeConfigGetter(configStore),
     recordRuntimeEvent,
   });
-  (globalThis as Record<string, unknown>)[
-    VOICE_EVENT_RECORDER_KEY
-  ] = recordRuntimeEvent;
+  (globalThis as Record<string, unknown>)[VOICE_EVENT_RECORDER_KEY] =
+    recordRuntimeEvent;
   const getContextModel = Pi.getExtensionContextModel;
   const isIdle = Pi.isExtensionContextIdle;
   const hasPendingMessages = Pi.hasExtensionContextPendingMessages;
@@ -165,6 +129,7 @@ export default function (pi: Pi.ExtensionAPI) {
     Queue.createTelegramQueueStore<Pi.ExtensionContext>();
   const deferredQueueDispatchRuntime =
     Queue.createTelegramDeferredQueueDispatchRuntime<Pi.ExtensionContext>({
+      delayMs: 50,
       recordRuntimeEvent,
     });
   const pollingControllerState = Polling.createTelegramPollingControllerState();
@@ -623,9 +588,23 @@ export default function (pi: Pi.ExtensionAPI) {
   const agentStartWithDedupReset = Lifecycle.createAgentStartDedupHook(
     agentLifecycleHooks.onAgentStart,
   );
+  const compactionObserver = Lifecycle.createTelegramCompactionObserverRuntime({
+    setCompactionInProgress: lifecycle.setCompactionInProgress,
+    updateStatus,
+    requestDeferredDispatchNextQueuedTelegramTurn:
+      deferredQueueDispatchRuntime.request,
+    dispatchNextQueuedTelegramTurn,
+    recordRuntimeEvent,
+  });
   Lifecycle.registerTelegramLifecycleHooks(pi, {
     ...sessionLifecycleRuntime,
     ...agentLifecycleHooks,
+    async onSessionShutdown(event, ctx) {
+      compactionObserver.onSessionShutdown();
+      await sessionLifecycleRuntime.onSessionShutdown(event, ctx);
+    },
+    onSessionBeforeCompact: compactionObserver.onSessionBeforeCompact,
+    onSessionCompact: compactionObserver.onSessionCompact,
     onAgentStart: agentStartWithDedupReset,
     onBeforeAgentStart: Prompts.createTelegramProactiveBeforeAgentStartHook({
       isProactivePushEnabled,

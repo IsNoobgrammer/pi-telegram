@@ -115,7 +115,7 @@ test("Telegram time injection mode setter persists telegram.json", async () => {
   const getMode = createTelegramTimeInjectionModeGetter(store);
   const setMode = createTelegramTimeInjectionModeSetter(store);
 
-  assert.equal(getMode(), "off");
+  assert.equal(getMode(), "hidden");
 
   await setMode("interval");
 

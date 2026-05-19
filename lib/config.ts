@@ -35,7 +35,7 @@ export interface TelegramOutboundHandlerConfig extends CommandTemplateObjectConf
   timeout?: number;
 }
 
-export type TelegramTimeMode = "off" | "always" | "interval";
+export type TelegramTimeMode = "hidden" | "always" | "interval";
 
 export interface TelegramTimeConfig {
   injectionMode?: TelegramTimeMode;
@@ -240,7 +240,7 @@ export function resolveTelegramTimeConfig(
   const injectionMode: TelegramTimeMode =
     raw?.injectionMode === "always" || raw?.injectionMode === "interval"
       ? raw.injectionMode
-      : "off";
+      : "hidden";
   const interval =
     typeof raw?.interval === "number" && raw.interval > 0
       ? raw.interval

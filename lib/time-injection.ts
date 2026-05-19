@@ -52,7 +52,7 @@ export function createTimeInjectionRuntime(
   return {
     resolveLine: (chatId, now = new Date()) => {
       const config = deps.getConfig();
-      if (config.injectionMode === "off") return null;
+      if (config.injectionMode === "hidden") return null;
       let line: string;
       try {
         line = formatTelegramTimeInjectionLine(now, config.timezone);

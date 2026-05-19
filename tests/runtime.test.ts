@@ -1335,6 +1335,111 @@ test("Extension runtime keeps queued turns blocked until compaction completes", 
   }
 });
 
+test("Extension runtime blocks queued dispatch during observed auto-compaction", async () => {
+  const telegramConfig = await createRuntimeTelegramConfigFixture();
+  const runtimeEvents: string[] = [];
+  let firstDispatchResolve: (() => void) | undefined;
+  const firstDispatched = new Promise<void>((resolve) => {
+    firstDispatchResolve = resolve;
+  });
+  const secondUpdates = createRuntimeDeferredResponse();
+  const { handlers, commands, pi } = createRuntimePiHarness({
+    sendUserMessage: (content) => {
+      recordRuntimeDispatchEvent(runtimeEvents, content);
+      firstDispatchResolve?.();
+    },
+  });
+  let getUpdatesCalls = 0;
+  const restoreFetch = setRuntimeTestFetch(async (input, init) => {
+    const method = getRuntimeTelegramApiMethod(input);
+    const body = parseJsonRequestBody(init);
+    if (method === "deleteWebhook") return createRuntimeTelegramApiResponse(true);
+    if (method === "getUpdates") {
+      getUpdatesCalls += 1;
+      if (getUpdatesCalls === 1) {
+        return createRuntimeTelegramApiResponse([
+          {
+            _: "other",
+            update_id: 1,
+            message: {
+              message_id: 41,
+              chat: { id: 99, type: "private" },
+              from: { id: 77, is_bot: false, first_name: "Test" },
+              text: "first telegram turn",
+            },
+          },
+        ]);
+      }
+      if (getUpdatesCalls === 2) return secondUpdates.promise;
+      throw new DOMException("stop", "AbortError");
+    }
+    if (method === "sendMessage") {
+      runtimeEvents.push(`send:${String(body?.text ?? "")}`);
+      return createRuntimeTelegramApiResponse({ message_id: 100 + runtimeEvents.length });
+    }
+    if (method === "sendMessageDraft" || method === "sendChatAction" || method === "editMessageText") {
+      return createRuntimeTelegramApiResponse(true);
+    }
+    throw new Error(`Unexpected Telegram API method: ${method}`);
+  });
+  try {
+    await telegramConfig.write({
+      botToken: "123:abc",
+      allowedUserId: 77,
+      lastUpdateId: 0,
+    });
+    (await getRuntimeTelegramExtension())(pi);
+    const ctx = createRuntimeExtensionContext();
+    await handlers.get("session_start")?.({}, ctx);
+    await commands.get("telegram-connect")?.handler("", ctx);
+    await firstDispatched;
+    await handlers.get("agent_start")?.({}, ctx);
+    secondUpdates.resolve(
+      createRuntimeTelegramApiResponse([
+        {
+          _: "other",
+          update_id: 2,
+          message: {
+            message_id: 42,
+            chat: { id: 99, type: "private" },
+            from: { id: 77, is_bot: false, first_name: "Test" },
+            text: "queued during active turn",
+          },
+        },
+      ]),
+    );
+    await waitForCondition(() => getUpdatesCalls >= 3);
+    await handlers.get("agent_end")?.(
+      {
+        messages: [
+          {
+            role: "assistant",
+            content: [{ type: "text", text: "done" }],
+          },
+        ],
+      },
+      ctx,
+    );
+    await handlers.get("session_before_compact")?.(
+      { signal: new AbortController().signal },
+      ctx,
+    );
+    await new Promise((resolve) => setTimeout(resolve, 80));
+    assert.equal(
+      runtimeEvents.includes("dispatch:[telegram] queued during active turn"),
+      false,
+    );
+    await handlers.get("session_compact")?.({}, ctx);
+    await waitForCondition(() =>
+      runtimeEvents.includes("dispatch:[telegram] queued during active turn"),
+    );
+    await handlers.get("session_shutdown")?.({}, ctx);
+  } finally {
+    restoreFetch();
+    await telegramConfig.restore();
+  }
+});
+
 test("Extension runtime coalesces media-group updates into one delayed dispatch", async () => {
   const telegramConfig = await createRuntimeTelegramConfigFixture();
   const runtimeEvents: string[] = [];

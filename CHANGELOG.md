@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+## 0.11.2: Queue Continuation, Compaction Safety, And Settings Polish
+
+- `[Time Context]` Renamed the disabled time injection mode from `off` to `hidden` in Settings and config defaults, matching voice reply mode semantics where no prompt-context line is injected. Legacy `off` callbacks/config values are still treated as hidden.
+- `[Settings UI]` Settings detail headings now show the current value immediately after the bold label in monospace style, making each submenu title double as the active setting summary.
+- `[Entrypoint]` Removed root-level API re-exports from `index.ts`; public extension APIs remain available from their owning `lib/*` modules while the root file stays a default-only composition root.
+- `[Continue Queue]` `/continue` now enqueues a standalone priority prompt without preserving already queued prompts as history. Impact: queued prompts stay iterative queue items instead of being folded into one combined `continue` prompt.
+- `[Auto Compaction]` Observes native `session_before_compact` / `session_compact` events and blocks queued Telegram prompt dispatch while compaction is running, then resumes the queue after compaction settles. Impact: queued Telegram turns no longer race Pi auto-compaction and trigger `Cannot read properties of undefined (reading 'signal')` after compaction.
+- `[Command Templates]` Updated the command-template helper library and regressions with typed placeholders, array-index placeholder resolution, repeat fanout from array length, unbounded default timeout semantics, and trusted-command warnings.
+- `[Docs]` Updated the command-template standard with typed args, array placeholders, failure propagation, recover cleanup, and trust-boundary guidance.
+- `[Docs]` Decomposed oversized architecture documentation blocks into focused sections for runtime ownership, queue validation, application menu shape, outbound actions, and interactive controls. Impact: the architecture entry point is easier to scan without changing runtime behavior.
+- `[README]` Split queue reaction shortcuts into priority and removal lists, added `pi-xai-voice` as a companion extension, and kept the time-injection row label compact while preserving the full detail-heading label. Impact: operator-facing docs match the current Telegram menu language.
+- `[Context]` Recorded the convention that extension-local standards should stay self-contained and avoid naming sibling extension implementations as authorities. Impact: shared standards can evolve independently without creating false extension dependencies.
+
 ## 0.11.1: Time Context And Settings Polish
 
 - `[Time Context]` Added optional `telegram.json` `time` prompt context for Telegram-originated turns. `time.injectionMode` values are `off`, `always`, and per-chat `interval`; `time.interval` is stored in milliseconds and timezone comes from the system. The `[time]` line renders last after attachments, handler outputs, and voice context, and Settings exposes a `🕒 Time` mode selector.
@@ -138,7 +151,7 @@
 ## 0.9.4: Temp Dir And Command Template Hotfix
 
 - `[Telegram Temp Dir]` Default Telegram API temp files now respect `PI_CODING_AGENT_DIR`, falling back to `~/.pi/agent` when the env var is unset. Impact: sandboxed or relocated agent dirs no longer force Telegram downloads through the default home-directory path.
-- `[Command Templates]` Synced the local Command Template Standard with `pi-auto-tools@0.5.5`: command-template nodes now document `mode`, `label`, `delay`, `repeat`, parallel fanout semantics, zero-based repeat placeholders, padding, and limited arithmetic expressions such as `{_(index+1)}`. Impact: inbound/outbound Telegram handler docs and helpers share the current portable automation contract.
+- `[Command Templates]` Updated the local Command Template Standard: command-template nodes now document `mode`, `label`, `delay`, `repeat`, parallel fanout semantics, zero-based repeat placeholders, padding, and limited arithmetic expressions such as `{_(index+1)}`. Impact: inbound/outbound Telegram handler docs and helpers share the current portable automation contract without depending on another extension's documentation.
 - `[Queue Menu]` Empty queue refresh clicks now rotate through compact alternate empty-state headings while preserving the default first-open `⌛ Queue is empty.` state, and the Refresh button now stays directly under Back for both empty and populated queue lists. Impact: manual queue polling feels alive and the primary refresh control stays in a stable location without changing queue semantics.
 - `[Package]` Bumped package metadata to `0.9.4` and kept the lockfile in sync.
 
@@ -190,7 +203,7 @@
 - `[Configuration Docs]` Documented the configuration philosophy that rich visual/TUI setup stays minimal for now while agents can read README/docs and update `telegram.json` for advanced workflows. Impact: configuration guidance matches the extension's agent-assisted operator model without adding premature TUI surfaces.
 - `[Outbound Docs]` Tightened voice-handler critical-step wording around transform → TTS → conversion pipelines and handler-level fallbacks. Impact: docs now match translated voice pipelines without implying provider-specific TTS fallbacks.
 - `[Package]` Bumped package metadata to `0.8.1` and kept the lockfile in sync.
-- `[Command Template Docs]` Synchronized `docs/command-templates.md` bit-for-bit with the current portable standard shared by `pi-auto-tools`. Impact: the documented standard now includes retry, fail-open composition, critical-step abort semantics, and the 30s default timeout in the same wording across both extensions.
+- `[Command Template Docs]` Updated `docs/command-templates.md` to the current portable standard. Impact: the documented standard now includes retry, fail-open composition, critical-step abort semantics, and the 30s default timeout without requiring cross-extension references.
 - `[Lock Docs]` Synchronized `docs/locks.md` bit-for-bit with the extension-neutral Locks Standard shared by `pi-wakeup`. Impact: singleton ownership documentation no longer carries project-specific examples that prevent exact reuse across extensions.
 
 ## 0.8.0: Handler Bus
