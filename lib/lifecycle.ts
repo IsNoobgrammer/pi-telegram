@@ -10,6 +10,8 @@ import type {
   BeforeAgentStartEvent,
   ExtensionAPI,
   ExtensionContext,
+  SessionBeforeCompactEvent,
+  SessionCompactEvent,
   SessionShutdownEvent,
   SessionStartEvent,
 } from "./pi.ts";
@@ -50,6 +52,14 @@ export interface TelegramLifecycleRegistrationDeps {
     event: SessionShutdownEvent,
     ctx: ExtensionContext,
   ) => Promise<void>;
+  onSessionBeforeCompact?: (
+    event: SessionBeforeCompactEvent,
+    ctx: ExtensionContext,
+  ) => Promise<void> | void;
+  onSessionCompact?: (
+    event: SessionCompactEvent,
+    ctx: ExtensionContext,
+  ) => Promise<void> | void;
   onBeforeAgentStart: (
     event: BeforeAgentStartEvent,
     ctx: ExtensionContext,
@@ -90,6 +100,76 @@ export interface TelegramSessionLifecycleHooks {
     event: SessionShutdownEvent,
     ctx: ExtensionContext,
   ) => Promise<void>;
+}
+
+type TelegramLifecycleTimer = number | ReturnType<typeof setTimeout>;
+
+export interface TelegramCompactionObserverRuntimeDeps<TContext> {
+  setCompactionInProgress: (inProgress: boolean) => void;
+  updateStatus: (ctx: TContext) => void;
+  requestDeferredDispatchNextQueuedTelegramTurn: (
+    dispatch: (ctx: TContext) => void,
+  ) => void;
+  dispatchNextQueuedTelegramTurn: (ctx: TContext) => void;
+  recordRuntimeEvent?: (category: string, error: unknown) => void;
+  timeoutMs?: number;
+  setTimer?: (
+    callback: () => void,
+    ms: number,
+  ) => TelegramLifecycleTimer;
+  clearTimer?: (timer: TelegramLifecycleTimer) => void;
+}
+
+export interface TelegramCompactionObserverRuntime<TContext> {
+  onSessionBeforeCompact: (
+    event: SessionBeforeCompactEvent,
+    ctx: TContext,
+  ) => void;
+  onSessionCompact: (event: SessionCompactEvent, ctx: TContext) => void;
+  onSessionShutdown: () => void;
+}
+
+export function createTelegramCompactionObserverRuntime<TContext>(
+  deps: TelegramCompactionObserverRuntimeDeps<TContext>,
+): TelegramCompactionObserverRuntime<TContext> {
+  const timeoutMs = deps.timeoutMs ?? 300_000;
+  const setTimer = deps.setTimer ?? setTimeout;
+  const clearTimer = deps.clearTimer ?? clearTimeout;
+  let fallbackTimer: TelegramLifecycleTimer | undefined;
+  const clearFallbackTimer = (): void => {
+    if (!fallbackTimer) return;
+    clearTimer(fallbackTimer);
+    fallbackTimer = undefined;
+  };
+  const requestDispatch = (): void => {
+    deps.requestDeferredDispatchNextQueuedTelegramTurn(
+      deps.dispatchNextQueuedTelegramTurn,
+    );
+  };
+  return {
+    onSessionBeforeCompact: (_event, ctx) => {
+      deps.setCompactionInProgress(true);
+      deps.updateStatus(ctx);
+      clearFallbackTimer();
+      fallbackTimer = setTimer(() => {
+        fallbackTimer = undefined;
+        deps.setCompactionInProgress(false);
+        deps.updateStatus(ctx);
+        deps.recordRuntimeEvent?.(
+          "compact",
+          new Error("Compaction observer timed out"),
+        );
+        requestDispatch();
+      }, timeoutMs);
+    },
+    onSessionCompact: (_event, ctx) => {
+      clearFallbackTimer();
+      deps.setCompactionInProgress(false);
+      deps.updateStatus(ctx);
+      requestDispatch();
+    },
+    onSessionShutdown: clearFallbackTimer,
+  };
 }
 
 export function createDedupAgentStartHook(
@@ -138,6 +218,12 @@ export function registerTelegramLifecycleHooks(
   });
   pi.on("session_shutdown", async (event, ctx) => {
     await deps.onSessionShutdown(event, ctx);
+  });
+  pi.on("session_before_compact", async (event, ctx) => {
+    await deps.onSessionBeforeCompact?.(event, ctx);
+  });
+  pi.on("session_compact", async (event, ctx) => {
+    await deps.onSessionCompact?.(event, ctx);
   });
   pi.on("before_agent_start", async (event, ctx) => {
     return deps.onBeforeAgentStart(event, ctx);

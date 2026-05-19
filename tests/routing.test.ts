@@ -185,7 +185,7 @@ test("Routing runtime forwards authorized text messages into prompt queueing", a
     },
     { cwd: "/repo" },
   );
-  const [continueTurn] = telegramQueueStore.getQueuedItems();
+  const [continueTurn, originalTurn] = telegramQueueStore.getQueuedItems();
   assert.equal(continueTurn?.kind, "prompt");
   assert.equal(continueTurn?.queueLane, "priority");
   assert.equal(continueTurn?.statusSummary, "continue");
@@ -195,6 +195,7 @@ test("Routing runtime forwards authorized text messages into prompt queueing", a
       : "",
     "[telegram] continue",
   );
+  assert.equal(originalTurn?.statusSummary, "hello from telegram");
   await routeRuntime.handleUpdate(
     {
       callback_query: {

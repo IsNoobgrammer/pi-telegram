@@ -7,6 +7,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import telegramExtension from "../index.ts";
+import * as telegramEntrypoint from "../index.ts";
 import type { ExtensionAPI, ExtensionContext } from "../lib/pi.ts";
 
 type RegisteredIndexTool = {
@@ -60,6 +61,10 @@ function assertSystemPromptResult(
   assert.equal(typeof Reflect.get(value, "systemPrompt"), "string");
 }
 
+test("Extension entrypoint exposes only the default composition root", () => {
+  assert.deepEqual(Object.keys(telegramEntrypoint), ["default"]);
+});
+
 test("Extension entrypoint wires domain bindings into the pi API", () => {
   const harness = createIndexApiHarness();
   telegramExtension(harness.api);
@@ -78,6 +83,8 @@ test("Extension entrypoint wires domain bindings into the pi API", () => {
     [
       "session_start",
       "session_shutdown",
+      "session_before_compact",
+      "session_compact",
       "before_agent_start",
       "model_select",
       "agent_start",

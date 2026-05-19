@@ -17,7 +17,7 @@ import {
 
 function makeRuntime(config: Partial<ResolvedTelegramTimeConfig>) {
   const resolved: ResolvedTelegramTimeConfig = {
-    injectionMode: config.injectionMode ?? "off",
+    injectionMode: config.injectionMode ?? "hidden",
     interval: config.interval ?? 60 * 60 * 1000,
     timezone: config.timezone ?? "UTC",
   };
@@ -26,10 +26,17 @@ function makeRuntime(config: Partial<ResolvedTelegramTimeConfig>) {
 
 test("Time config resolves defaults when keys are missing", () => {
   const resolved = resolveTelegramTimeConfig(undefined);
-  assert.equal(resolved.injectionMode, "off");
+  assert.equal(resolved.injectionMode, "hidden");
   assert.equal(resolved.interval, 60 * 60 * 1000);
   assert.equal(typeof resolved.timezone, "string");
   assert.ok(resolved.timezone.length > 0);
+});
+
+test("Time config maps legacy off mode to hidden", () => {
+  const resolved = resolveTelegramTimeConfig({
+    injectionMode: "off" as never,
+  });
+  assert.equal(resolved.injectionMode, "hidden");
 });
 
 test("Time config rejects non-positive interval", () => {
@@ -40,8 +47,8 @@ test("Time config rejects non-positive interval", () => {
   assert.equal(resolved.interval, 60 * 60 * 1000);
 });
 
-test("Time injection runtime returns null for every call when injectionMode is off", () => {
-  const runtime = makeRuntime({ injectionMode: "off", timezone: "UTC" });
+test("Time injection runtime returns null for every call when injectionMode is hidden", () => {
+  const runtime = makeRuntime({ injectionMode: "hidden", timezone: "UTC" });
   for (let i = 0; i < 5; i++) {
     assert.equal(runtime.resolveLine(1, new Date(i * 1000)), null);
   }

@@ -80,6 +80,12 @@ test("Lifecycle helpers register pi hooks and delegate to handlers", async () =>
     onSessionShutdown: async () => {
       events.push("session-shutdown");
     },
+    onSessionBeforeCompact: () => {
+      events.push("session-before-compact");
+    },
+    onSessionCompact: () => {
+      events.push("session-compact");
+    },
     onBeforeAgentStart: () => {
       events.push("before-agent-start");
       return { systemPrompt: "prompt" };
@@ -111,6 +117,8 @@ test("Lifecycle helpers register pi hooks and delegate to handlers", async () =>
     [
       "session_start",
       "session_shutdown",
+      "session_before_compact",
+      "session_compact",
       "before_agent_start",
       "model_select",
       "agent_start",
@@ -124,6 +132,14 @@ test("Lifecycle helpers register pi hooks and delegate to handlers", async () =>
   const ctx = createLifecycleContext();
   await getRequiredLifecycleHandler(harness.handlers, "session_start")({}, ctx);
   await getRequiredLifecycleHandler(harness.handlers, "session_shutdown")(
+    {},
+    ctx,
+  );
+  await getRequiredLifecycleHandler(harness.handlers, "session_before_compact")(
+    {},
+    ctx,
+  );
+  await getRequiredLifecycleHandler(harness.handlers, "session_compact")(
     {},
     ctx,
   );
@@ -151,6 +167,8 @@ test("Lifecycle helpers register pi hooks and delegate to handlers", async () =>
   assert.deepEqual(events, [
     "session-start",
     "session-shutdown",
+    "session-before-compact",
+    "session-compact",
     "before-agent-start",
     "model-select",
     "agent-start",

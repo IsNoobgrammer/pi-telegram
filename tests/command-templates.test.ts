@@ -10,6 +10,7 @@ import {
   buildCommandTemplateInvocation,
   execCommandTemplate,
   expandCommandTemplateConfigs,
+  getCommandTemplateWarnings,
   splitCommandTemplate,
 } from "../lib/command-templates.ts";
 
@@ -113,7 +114,7 @@ test("Template composition expansion preserves retry and critical on step object
 test("Command template repeat expands numbered defaults", () => {
   const steps = expandCommandTemplateConfigs({
     repeat: 3,
-    template: "render page{_(index+1)}.html prev=page{_(prev+1)}.html next=page{_(next+1)}.html raw={index}/{repeat}",
+    template: "render page{_(index+1)}.html prev=page{_(prev+1)}.html next=page{_(next+1)}.html raw={index}/{repeat}"
   });
   assert.equal(steps.length, 3);
   assert.deepEqual(
@@ -139,18 +140,31 @@ test("Command template repeat expands numbered defaults", () => {
     },
   );
   const invocation = buildCommandTemplateInvocation(steps[0], {}, "/work");
-  assert.deepEqual(invocation.args, [
-    "page01.html",
-    "prev=page03.html",
-    "next=page02.html",
-    "raw=0/3",
-  ]);
-  assert.deepEqual(buildCommandTemplateInvocation(steps[2], {}, "/work").args, [
-    "page03.html",
-    "prev=page02.html",
-    "next=page01.html",
-    "raw=2/3",
-  ]);
+  assert.deepEqual(invocation.args, ["page01.html", "prev=page03.html", "next=page02.html", "raw=0/3"]);
+  assert.deepEqual(buildCommandTemplateInvocation(steps[2], {}, "/work").args, ["page03.html", "prev=page02.html", "next=page01.html", "raw=2/3"]);
+});
+
+test("Command templates detect high-risk trusted executable shapes", () => {
+  const warnings = getCommandTemplateWarnings({
+    template: [
+      "bash -c {script}",
+      "node -e {code}",
+      "rm -rf {work_dir}",
+    ],
+  });
+  assert.equal(warnings.length, 3);
+  assert.match(warnings[0], /bash/);
+  assert.match(warnings[1], /eval/);
+  assert.match(warnings[2], /removes filesystem paths/);
+});
+
+test("Command templates resolve typed inline placeholders", () => {
+  const invocation = buildCommandTemplateInvocation(
+    "tool {file:path} {timeout:int=60000} {speed:number=1.5} {mode:enum(check,fix)=check}",
+    { file: "/tmp/a.txt" },
+    "/work",
+  );
+  assert.deepEqual(invocation.args, ["/tmp/a.txt", "60000", "1.5", "check"]);
 });
 
 test("Command templates resolve defaults and inline placeholder defaults", () => {
@@ -166,6 +180,18 @@ test("Command templates resolve defaults and inline placeholder defaults", () =>
     command: "/work/tts",
     args: ["--text", "hello world", "--lang", "ru", "--rate", "+30%"],
   });
+});
+
+test("Command templates resolve array-index placeholders and recursive defaults", () => {
+  const invocation = buildCommandTemplateInvocation(
+    {
+      defaults: { prompt: "{prompts[index]}" },
+      template: "subagent {prompt}",
+    },
+    { index: "1", prompts: ["left", "right"] },
+    "/work",
+  );
+  assert.deepEqual(invocation.args, ["right"]);
 });
 
 test("Command template execution writes stdin without invoking a shell", async () => {
@@ -209,10 +235,11 @@ test("Command template retry succeeds on second attempt", async () => {
     fs.writeFileSync(p, String(n));
     if (n < 2) process.exit(1);
   `;
-  const result = await execCommandTemplate(process.execPath, ["-e", script], {
-    retry: 2,
-    killGrace: 10,
-  });
+  const result = await execCommandTemplate(
+    process.execPath,
+    ["-e", script],
+    { retry: 2, killGrace: 10 },
+  );
   assert.equal(result.code, 0);
   assert.equal(readFileSync(counterFile, "utf8").trim(), "2");
   unlinkSync(counterFile);
@@ -237,7 +264,7 @@ test("Command template retry default is 1 (no retry)", async () => {
   assert.notEqual(result.code, 0);
 });
 
-test("Command templates enforce 30s default timeout", async () => {
+test("Command templates leave timeout disabled by default", async () => {
   const result = await execCommandTemplate(
     process.execPath,
     ["-e", "setTimeout(() => {}, 100);"],

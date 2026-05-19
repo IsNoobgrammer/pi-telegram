@@ -497,7 +497,7 @@ test("buildTelegramSettingsMenuReplyMarkup injects extension settings rows", asy
     }),
   );
 
-  const markup = buildTelegramSettingsMenuReplyMarkup(false, "manual", "off", registry);
+  const markup = buildTelegramSettingsMenuReplyMarkup(false, "manual", "hidden", registry);
   const rows = markup.inline_keyboard;
 
   // First row: Main menu back

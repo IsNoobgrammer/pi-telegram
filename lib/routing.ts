@@ -302,28 +302,19 @@ export function createTelegramInboundRouteRuntime<
     message: TMessage,
     ctx: TContext,
   ): Promise<void> => {
-    const enqueuePlan = Queue.planTelegramPromptEnqueue(
-      deps.telegramQueueStore.getQueuedItems(),
-      deps.bridgeRuntime.lifecycle.shouldPreserveQueuedTurnsAsHistory(),
-    );
     deps.bridgeRuntime.lifecycle.setPreserveQueuedTurnsAsHistory(false);
     const continueMessage = {
       ...message,
       text: "continue",
       caption: undefined,
     } as TMessage;
-    const turn = await promptTurnBuilder(
-      [continueMessage],
-      enqueuePlan.historyTurns,
-      ctx,
-    );
+    const turn = await promptTurnBuilder([continueMessage], [], ctx);
     const continueTurn = {
       ...turn,
       queueLane: "priority" as const,
       laneOrder: Number.MIN_SAFE_INTEGER + turn.queueOrder,
       statusSummary: "continue",
     };
-    deps.telegramQueueStore.setQueuedItems(enqueuePlan.remainingItems);
     deps.queueMutationRuntime.append(continueTurn, ctx);
     deps.dispatchNextQueuedTelegramTurn(ctx);
   };
