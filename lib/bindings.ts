@@ -326,4 +326,32 @@ export function registerTelegramLifecycleRuntimeHooks({
     }),
     ...messageActivityTypingHooks,
   });
+
+  // Register tool_call interception for interactive tools
+  // This hooks into Pi's tool execution to redirect ctx.ui calls to Telegram
+  pi.on("tool_call", async (event) => {
+    // Only intercept specific tools that use ctx.ui
+    if (event.toolName === "ask_user_question") {
+      const { interceptToolForTelegram } = await import("./telegram-ui-bridge.ts");
+      const turn = activeTurnRuntime.get();
+      if (!turn) return undefined;
+
+      const result = await interceptToolForTelegram(
+        event.toolName,
+        event.input as Record<string, unknown>,
+        {
+          sendMessage: async (chatId, text, options) => {
+            // Use the reply transport to send message
+            return undefined;
+          },
+          answerCallbackQuery: async () => {},
+          getActiveChatId: () => turn.chatId,
+        },
+      );
+      if (result.intercepted) {
+        return { block: true, reason: "Handled via Telegram" };
+      }
+    }
+    return undefined;
+  });
 }
