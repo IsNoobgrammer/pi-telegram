@@ -46,11 +46,100 @@ export interface PendingUIPrompt {
   createdAt: number;
 }
 
-// --- State ---
+// --- Overlay Widget State ---
+
+export interface OverlayWidget {
+  id: string;
+  chatId: number;
+  messageId?: number;
+  title: string;
+  content: string[];
+  createdAt: number;
+}
+
+const overlayWidgets = new Map<string, OverlayWidget>();
+let overlayCounter = 0;
 
 const pendingPrompts = new Map<string, PendingUIPrompt>();
 let promptCounter = 0;
 const DEFAULT_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
+
+// --- Overlay Widget Functions ---
+
+/**
+ * Create an overlay widget that stays at the bottom of the chat.
+ * Useful for tools like todo that persist until tasks are completed.
+ */
+export async function createOverlayWidget(
+  deps: TelegramUIBridgeDeps,
+  title: string,
+  content: string[],
+): Promise<string> {
+  const chatId = deps.getActiveChatId();
+  if (chatId === undefined) return "";
+
+  const widgetId = `overlay-${++overlayCounter}`;
+
+  // Format the overlay message
+  const formattedContent = content.map((line) => `  ${line}`).join("\n");
+  const messageText = `<b>${escapeHtml(title)}</b>\n\n${escapeHtml(formattedContent)}`;
+
+  // Send as a persistent message
+  const messageId = await deps.sendMessage(chatId, messageText, {
+    parseMode: "HTML",
+  });
+
+  // Store the widget
+  const widget: OverlayWidget = {
+    id: widgetId,
+    chatId,
+    messageId,
+    title,
+    content,
+    createdAt: Date.now(),
+  };
+  overlayWidgets.set(widgetId, widget);
+
+  return widgetId;
+}
+
+/**
+ * Update an existing overlay widget's content.
+ */
+export async function updateOverlayWidget(
+  deps: TelegramUIBridgeDeps,
+  widgetId: string,
+  content: string[],
+): Promise<void> {
+  const widget = overlayWidgets.get(widgetId);
+  if (!widget || !widget.messageId) return;
+
+  // Update content
+  widget.content = content;
+
+  // Format the updated message
+  const formattedContent = content.map((line) => `  ${line}`).join("\n");
+  const messageText = `<b>${escapeHtml(widget.title)}</b>\n\n${escapeHtml(formattedContent)}`;
+
+  // Edit the message
+  await deps.editMessage?.(widget.chatId, widget.messageId, messageText, {
+    parseMode: "HTML",
+  });
+}
+
+/**
+ * Remove an overlay widget.
+ */
+export function removeOverlayWidget(widgetId: string): void {
+  overlayWidgets.delete(widgetId);
+}
+
+/**
+ * Get all active overlay widgets for a chat.
+ */
+export function getOverlayWidgets(chatId: number): OverlayWidget[] {
+  return Array.from(overlayWidgets.values()).filter((w) => w.chatId === chatId);
+}
 
 // --- Factory ---
 
