@@ -341,8 +341,11 @@ export function registerTelegramLifecycleRuntimeHooks({
         event.input as Record<string, unknown>,
         {
           sendMessage: async (chatId, text, options) => {
-            // Use the reply transport to send message
-            return undefined;
+            // Use sendMarkdownReply for sending messages
+            const messageId = await sendMarkdownReply(chatId, undefined, text, {
+              replyMarkup: options?.replyMarkup as Keyboard.TelegramInlineKeyboardMarkup | undefined,
+            });
+            return messageId as number | undefined;
           },
           answerCallbackQuery: async () => {},
           getActiveChatId: () => turn.chatId,
