@@ -309,7 +309,19 @@ export function createTelegramInboundRouteRuntime<
       ctx,
     );
     if (handledBySettings) return;
+    
     const callbackData = query.data;
+    
+    // Check if this is a UI bridge callback (ui:{promptId}:{value})
+    if (callbackData?.startsWith("ui:")) {
+      const { handleUICallbackQuery } = await import("./telegram-ui-bridge.ts");
+      const handled = handleUICallbackQuery(query.id, callbackData);
+      if (handled) {
+        await deps.answerCallbackQuery(query.id);
+        return;
+      }
+    }
+    
     if (
       deps.sendUserMessage &&
       callbackData &&
