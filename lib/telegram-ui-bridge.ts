@@ -19,19 +19,30 @@ export interface TelegramUIBridgeDeps {
       parseMode?: "HTML" | "Markdown";
     },
   ) => Promise<number | undefined>;
+  editMessage?: (
+    chatId: number,
+    messageId: number,
+    text: string,
+    options?: {
+      replyMarkup?: unknown;
+      parseMode?: "HTML" | "Markdown";
+    },
+  ) => Promise<void>;
   answerCallbackQuery: (callbackQueryId: string, text?: string) => Promise<void>;
   getActiveChatId: () => number | undefined;
 }
 
 export interface PendingUIPrompt {
   id: string;
-  type: "select" | "confirm" | "input";
+  type: "select" | "confirm" | "input" | "multiSelect";
   chatId: number;
   messageId?: number;
   resolve: (value: unknown) => void;
   reject: (error: Error) => void;
   timeout?: ReturnType<typeof setTimeout>;
   options?: string[];
+  selectedIndices?: Set<number>;
+  multiSelect?: boolean;
   createdAt: number;
 }
 
@@ -148,6 +159,97 @@ async function handleSelect(
         pendingPrompts.delete(promptId);
         if (prompt.timeout) clearTimeout(prompt.timeout);
         resolve(undefined);
+      }, { once: true });
+    }
+
+    pendingPrompts.set(promptId, prompt);
+  });
+}
+
+// --- Multi-Select Handler ---
+
+/**
+ * Handle multi-select prompts with toggle buttons.
+ * User can select multiple options, then confirm with Done button.
+ */
+export async function handleMultiSelect(
+  deps: TelegramUIBridgeDeps,
+  title: string,
+  options: string[],
+  signal?: AbortSignal,
+  timeout?: number,
+): Promise<string[]> {
+  const chatId = deps.getActiveChatId();
+  if (chatId === undefined) return [];
+
+  const promptId = `multi-${++promptCounter}`;
+  const selectedIndices = new Set<number>();
+
+  // Truncate long options for Telegram buttons
+  const truncatedOptions = options.map((opt) =>
+    opt.length > 40 ? `${opt.slice(0, 37)}...` : opt,
+  );
+
+  // Build inline keyboard with toggle buttons
+  const buildKeyboard = () => {
+    const rows: Array<Array<{ text: string; callback_data: string }>> = [];
+    
+    for (let i = 0; i < truncatedOptions.length; i++) {
+      const isSelected = selectedIndices.has(i);
+      const prefix = isSelected ? "✅" : "⬜";
+      rows.push([
+        { text: `${prefix} ${truncatedOptions[i]}`, callback_data: `ui:${promptId}:toggle:${i}` },
+      ]);
+    }
+    
+    // Add Done button at the bottom
+    rows.push([
+      { text: "✔️ Done", callback_data: `ui:${promptId}:done` },
+    ]);
+    
+    return { inline_keyboard: rows };
+  };
+
+  // Format message
+  const optionsList = truncatedOptions
+    .map((opt, i) => `${selectedIndices.has(i) ? "✅" : "⬜"} ${opt}`)
+    .join("\n");
+  const messageText = `<b>${escapeHtml(title)}</b>\n\n${escapeHtml(optionsList)}\n\n_Select multiple options, then tap Done_`;
+
+  // Send message with buttons
+  const messageId = await deps.sendMessage(chatId, messageText, {
+    replyMarkup: buildKeyboard(),
+    parseMode: "HTML",
+  });
+
+  // Create pending promise
+  return new Promise<string[]>((resolve, reject) => {
+    const prompt: PendingUIPrompt = {
+      id: promptId,
+      type: "multiSelect",
+      chatId,
+      messageId,
+      resolve: resolve as (value: unknown) => void,
+      reject,
+      options,
+      selectedIndices,
+      createdAt: Date.now(),
+    };
+
+    // Set up timeout
+    const timeoutMs = timeout ?? DEFAULT_TIMEOUT_MS;
+    prompt.timeout = setTimeout(() => {
+      pendingPrompts.delete(promptId);
+      deps.sendMessage(chatId, "⏰ Selection timed out.", { parseMode: "HTML" }).catch(() => {});
+      resolve([]);
+    }, timeoutMs);
+
+    // Handle abort signal
+    if (signal) {
+      signal.addEventListener("abort", () => {
+        pendingPrompts.delete(promptId);
+        if (prompt.timeout) clearTimeout(prompt.timeout);
+        resolve([]);
       }, { once: true });
     }
 
@@ -302,6 +404,7 @@ function handleSetStatus(_key: string, _text: string | undefined): void {
 export function handleUICallbackQuery(
   callbackQueryId: string,
   data: string,
+  deps?: TelegramUIBridgeDeps,
 ): boolean {
   // Parse callback data: ui:{promptId}:{value}
   const match = data.match(/^ui:([^:]+):(.+)$/);
@@ -311,7 +414,12 @@ export function handleUICallbackQuery(
   const prompt = pendingPrompts.get(promptId);
   if (!prompt) return false;
 
-  // Clean up
+  // Handle multiSelect toggle/done separately
+  if (prompt.type === "multiSelect") {
+    return handleMultiSelectCallback(prompt, value, deps);
+  }
+
+  // Clean up for single-select/confirm
   if (prompt.timeout) clearTimeout(prompt.timeout);
   pendingPrompts.delete(promptId);
 
@@ -332,6 +440,77 @@ export function handleUICallbackQuery(
   }
 
   return true;
+}
+
+// --- Multi-Select Callback Handler ---
+
+function handleMultiSelectCallback(
+  prompt: PendingUIPrompt,
+  value: string,
+  deps?: TelegramUIBridgeDeps,
+): boolean {
+  // Toggle: ui:{promptId}:toggle:{index}
+  if (value.startsWith("toggle:")) {
+    const index = parseInt(value.split(":")[1], 10);
+    if (!prompt.selectedIndices) prompt.selectedIndices = new Set();
+    
+    if (prompt.selectedIndices.has(index)) {
+      prompt.selectedIndices.delete(index);
+    } else {
+      prompt.selectedIndices.add(index);
+    }
+    
+    // Update the message to reflect selection
+    if (deps && prompt.messageId) {
+      const optionsList = (prompt.options ?? [])
+        .map((opt, i) => `${prompt.selectedIndices?.has(i) ? "✅" : "⬜"} ${opt}`)
+        .join("\n");
+      const messageText = `<b>${escapeHtml("Select options")}</b>\n\n${escapeHtml(optionsList)}\n\n_Select multiple options, then tap Done_`;
+      
+      const keyboard = buildMultiSelectKeyboard(prompt);
+      deps.editMessage?.(prompt.chatId, prompt.messageId, messageText, {
+        replyMarkup: keyboard,
+        parseMode: "HTML",
+      }).catch(() => {});
+    }
+    
+    // Don't resolve yet, keep prompt active
+    return true;
+  }
+  
+  // Done: ui:{promptId}:done
+  if (value === "done") {
+    if (prompt.timeout) clearTimeout(prompt.timeout);
+    
+    // Resolve with selected options
+    const selected = (prompt.selectedIndices ?? new Set());
+    const result = (prompt.options ?? []).filter((_, i) => selected.has(i));
+    prompt.resolve(result);
+    pendingPrompts.delete(prompt.id);
+    return true;
+  }
+  
+  return false;
+}
+
+function buildMultiSelectKeyboard(prompt: PendingUIPrompt): unknown {
+  const rows: Array<Array<{ text: string; callback_data: string }>> = [];
+  
+  for (let i = 0; i < (prompt.options ?? []).length; i++) {
+    const isSelected = prompt.selectedIndices?.has(i) ?? false;
+    const prefix = isSelected ? "✅" : "⬜";
+    const opt = prompt.options?.[i] ?? "";
+    const truncated = opt.length > 40 ? `${opt.slice(0, 37)}...` : opt;
+    rows.push([
+      { text: `${prefix} ${truncated}`, callback_data: `ui:${prompt.id}:toggle:${i}` },
+    ]);
+  }
+  
+  rows.push([
+    { text: "✔️ Done", callback_data: `ui:${prompt.id}:done` },
+  ]);
+  
+  return { inline_keyboard: rows };
 }
 
 // --- Reply Handler (for input prompts) ---
