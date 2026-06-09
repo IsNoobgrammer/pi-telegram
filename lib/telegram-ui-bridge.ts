@@ -2,13 +2,8 @@
  * Telegram UI Bridge
  * Zone: telegram ui interception
  *
- * Practical approach: Intercept specific tools that use ctx.ui
- * and redirect their interactive prompts to Telegram.
- *
- * For now, this handles:
- * - ask_user_question tool (uses ctx.ui.select)
- *
- * Future: Can be extended to handle more tools.
+ * Implements ctx.ui interface for Telegram, enabling interactive tools
+ * like ask_user_question to work via Telegram buttons and replies.
  */
 
 import type { ExtensionUIContext } from "@earendil-works/pi-coding-agent";
@@ -37,12 +32,14 @@ export interface PendingUIPrompt {
   reject: (error: Error) => void;
   timeout?: ReturnType<typeof setTimeout>;
   options?: string[];
+  createdAt: number;
 }
 
 // --- State ---
 
 const pendingPrompts = new Map<string, PendingUIPrompt>();
 let promptCounter = 0;
+const DEFAULT_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
 
 // --- Factory ---
 
@@ -101,26 +98,28 @@ async function handleSelect(
   const promptId = `select-${++promptCounter}`;
 
   // Truncate long options for Telegram buttons
-  const truncatedOptions = options.map((opt, i) =>
+  const truncatedOptions = options.map((opt) =>
     opt.length > 50 ? `${opt.slice(0, 47)}...` : opt,
   );
 
-  // Build inline keyboard
+  // Build inline keyboard - one option per row for better readability
   const inlineKeyboard = {
     inline_keyboard: truncatedOptions.map((opt, i) => [
-      { text: opt, callback_data: `ui:${promptId}:${i}` },
+      { text: `${i + 1}. ${opt}`, callback_data: `ui:${promptId}:${i}` },
     ]),
   };
 
+  // Format message with options list
+  const optionsList = truncatedOptions
+    .map((opt, i) => `${i + 1}. ${opt}`)
+    .join("\n");
+  const messageText = `<b>${escapeHtml(title)}</b>\n\n${escapeHtml(optionsList)}`;
+
   // Send message with buttons
-  const messageId = await deps.sendMessage(
-    chatId,
-    `<b>${escapeHtml(title)}</b>\n\nSelect an option:`,
-    {
-      replyMarkup: inlineKeyboard,
-      parseMode: "HTML",
-    },
-  );
+  const messageId = await deps.sendMessage(chatId, messageText, {
+    replyMarkup: inlineKeyboard,
+    parseMode: "HTML",
+  });
 
   // Create pending promise
   return new Promise<string | undefined>((resolve, reject) => {
@@ -132,15 +131,16 @@ async function handleSelect(
       resolve: resolve as (value: unknown) => void,
       reject,
       options,
+      createdAt: Date.now(),
     };
 
-    // Set up timeout
-    if (timeout) {
-      prompt.timeout = setTimeout(() => {
-        pendingPrompts.delete(promptId);
-        resolve(undefined);
-      }, timeout);
-    }
+    // Set up timeout (default 5 minutes)
+    const timeoutMs = timeout ?? DEFAULT_TIMEOUT_MS;
+    prompt.timeout = setTimeout(() => {
+      pendingPrompts.delete(promptId);
+      deps.sendMessage(chatId, "⏰ Selection timed out.", { parseMode: "HTML" }).catch(() => {});
+      resolve(undefined);
+    }, timeoutMs);
 
     // Handle abort signal
     if (signal) {
@@ -148,7 +148,7 @@ async function handleSelect(
         pendingPrompts.delete(promptId);
         if (prompt.timeout) clearTimeout(prompt.timeout);
         resolve(undefined);
-      });
+      }, { once: true });
     }
 
     pendingPrompts.set(promptId, prompt);
@@ -169,7 +169,7 @@ async function handleConfirm(
 
   const promptId = `confirm-${++promptCounter}`;
 
-  // Build Yes/No buttons
+  // Build Yes/No buttons with better styling
   const inlineKeyboard = {
     inline_keyboard: [
       [
@@ -179,15 +179,14 @@ async function handleConfirm(
     ],
   };
 
+  // Format message
+  const messageText = `<b>${escapeHtml(title)}</b>\n\n${escapeHtml(message)}`;
+
   // Send message with buttons
-  const messageId = await deps.sendMessage(
-    chatId,
-    `<b>${escapeHtml(title)}</b>\n\n${escapeHtml(message)}`,
-    {
-      replyMarkup: inlineKeyboard,
-      parseMode: "HTML",
-    },
-  );
+  const messageId = await deps.sendMessage(chatId, messageText, {
+    replyMarkup: inlineKeyboard,
+    parseMode: "HTML",
+  });
 
   // Create pending promise
   return new Promise<boolean>((resolve, reject) => {
@@ -198,15 +197,16 @@ async function handleConfirm(
       messageId,
       resolve: resolve as (value: unknown) => void,
       reject,
+      createdAt: Date.now(),
     };
 
-    // Set up timeout
-    if (timeout) {
-      prompt.timeout = setTimeout(() => {
-        pendingPrompts.delete(promptId);
-        resolve(false);
-      }, timeout);
-    }
+    // Set up timeout (default 5 minutes)
+    const timeoutMs = timeout ?? DEFAULT_TIMEOUT_MS;
+    prompt.timeout = setTimeout(() => {
+      pendingPrompts.delete(promptId);
+      deps.sendMessage(chatId, "⏰ Confirmation timed out.", { parseMode: "HTML" }).catch(() => {});
+      resolve(false);
+    }, timeoutMs);
 
     // Handle abort signal
     if (signal) {
@@ -214,7 +214,7 @@ async function handleConfirm(
         pendingPrompts.delete(promptId);
         if (prompt.timeout) clearTimeout(prompt.timeout);
         resolve(false);
-      });
+      }, { once: true });
     }
 
     pendingPrompts.set(promptId, prompt);
@@ -253,6 +253,7 @@ async function handleInput(
       messageId,
       resolve: resolve as (value: unknown) => void,
       reject,
+      createdAt: Date.now(),
     };
 
     // Set up timeout
@@ -446,6 +447,7 @@ export async function interceptToolForTelegram(
       resolve: resolve as (value: unknown) => void,
       reject,
       options,
+      createdAt: Date.now(),
     };
 
     // Timeout after 5 minutes
