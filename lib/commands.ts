@@ -5,7 +5,7 @@
  */
 
 import { pairTelegramUserIfNeeded } from "./config.ts";
-import type { ExtensionAPI, ExtensionCommandContext } from "./pi.ts";
+import type { ExtensionAPI, ExtensionCommandContext, PiSlashCommandInfo } from "./pi.ts";
 import {
   createTelegramControlItemBuilder,
   createTelegramControlQueueController,
@@ -250,13 +250,62 @@ export interface TelegramBotCommandRegistrationDeps {
   setMyCommands: (
     commands: readonly TelegramBotCommandDefinition[],
   ) => Promise<unknown>;
+  getCommands: () => readonly PiSlashCommandInfo[];
+}
+
+// Mapping from Telegram command names (underscores) back to Pi command names (hyphens)
+// TODO: Enable when Pi commands can be executed programmatically (currently TUI-only)
+const telegramToPiCommandMap = new Map<string, string>();
+const INCLUDE_PI_COMMANDS_IN_MENU = false; // Set to true to include Pi commands in Telegram menu
+
+export function resolvePiCommandName(telegramName: string): string {
+  return telegramToPiCommandMap.get(telegramName) ?? telegramName;
 }
 
 export async function registerTelegramBotCommands(
   deps: TelegramBotCommandRegistrationDeps,
 ): Promise<void> {
   const extensionCommands = getVisibleTelegramExtensionBotCommands();
-  if (extensionCommands.length === 0) {
+  
+  // Get all Pi commands and filter out already-registered ones
+  const piCommands = deps.getCommands();
+  const builtinCommandNames = new Set(TELEGRAM_BOT_COMMANDS.map((c) => c.command));
+  const extensionCommandNames = new Set(extensionCommands.map((c) => c.command));
+  
+  const TELEGRAM_CMD_DESC_MAX = 150;
+  const TELEGRAM_CMD_NAME_MAX = 32;
+  // Telegram only allows [a-zA-Z0-9_] in command names (no hyphens)
+  const telegramSafeName = (name: string) => name.replace(/-/g, "_");
+  
+  // Clear and rebuild the mapping
+  telegramToPiCommandMap.clear();
+  
+  // Only include Pi commands if enabled (currently disabled - Pi commands are TUI-only)
+  const piBotCommands: TelegramBotCommandDefinition[] = INCLUDE_PI_COMMANDS_IN_MENU
+    ? piCommands
+        .filter((cmd) => 
+          !builtinCommandNames.has(cmd.name) && 
+          !extensionCommandNames.has(cmd.name) &&
+          cmd.description &&
+          telegramSafeName(cmd.name).length <= TELEGRAM_CMD_NAME_MAX &&
+          /^[a-z0-9_]+$/.test(telegramSafeName(cmd.name))
+        )
+        .map((cmd) => {
+          const tgName = telegramSafeName(cmd.name);
+          // Store mapping if name changed (hyphen → underscore)
+          if (tgName !== cmd.name) {
+            telegramToPiCommandMap.set(tgName, cmd.name);
+          }
+          return {
+            command: tgName,
+            description: cmd.description!.length > TELEGRAM_CMD_DESC_MAX
+              ? cmd.description!.slice(0, TELEGRAM_CMD_DESC_MAX - 3) + "..."
+              : cmd.description!,
+          };
+        })
+    : [];
+  
+  if (extensionCommands.length === 0 && piBotCommands.length === 0) {
     await deps.setMyCommands(TELEGRAM_BOT_COMMANDS);
     return;
   }
@@ -264,12 +313,13 @@ export async function registerTelegramBotCommands(
     (command) => command.command === "compact",
   );
   if (compactCommandIndex === -1) {
-    await deps.setMyCommands([...TELEGRAM_BOT_COMMANDS, ...extensionCommands]);
+    await deps.setMyCommands([...TELEGRAM_BOT_COMMANDS, ...extensionCommands, ...piBotCommands]);
     return;
   }
   await deps.setMyCommands([
     ...TELEGRAM_BOT_COMMANDS.slice(0, compactCommandIndex + 1),
     ...extensionCommands,
+    ...piBotCommands,
     ...TELEGRAM_BOT_COMMANDS.slice(compactCommandIndex + 1),
   ]);
 }
@@ -778,6 +828,7 @@ export interface TelegramCommandRuntimeDeps<
   getAllowedUserId: () => number | undefined;
   setAllowedUserId: (userId: number) => void;
   registerBotCommands: () => Promise<void>;
+  getCommands: () => readonly PiSlashCommandInfo[];
   getPromptTemplateCommands?: () => readonly TelegramPromptTemplateMenuCommand[];
   persistConfig: () => Promise<void>;
   sendTextReply: (message: TMessage, text: string) => Promise<void>;
@@ -786,13 +837,6 @@ export interface TelegramCommandRuntimeDeps<
 
 export const TELEGRAM_APP_MENU_INTRO_HTML = [
   "<b>π Telegram</b>",
-  "",
-  `${formatTelegramCommandEmojiPrefix("start")}/start — Open menu / Pair bridge`,
-  `${formatTelegramCommandEmojiPrefix("compact")}/compact — Compact current session`,
-  `${formatTelegramCommandEmojiPrefix("next")}/next — Force next turn`,
-  `${formatTelegramCommandEmojiPrefix("continue")}/continue — Queue continue prompt`,
-  `${formatTelegramCommandEmojiPrefix("abort")}/abort — Abort π`,
-  `${formatTelegramCommandEmojiPrefix("stop")}/stop — Abort π & Clear queue`,
 ].join("\n");
 
 function escapeTelegramCommandMenuHtml(text: string): string {
@@ -824,16 +868,11 @@ function buildTelegramExtensionCommandMenuLines(): string[] {
 function buildTelegramAppMenuIntroHtml(): string {
   const extensionLines = buildTelegramExtensionCommandMenuLines();
   if (extensionLines.length === 0) return TELEGRAM_APP_MENU_INTRO_HTML;
+  // Simplified menu: just header + extension commands
   return [
     "<b>π Telegram</b>",
     "",
-    `${formatTelegramCommandEmojiPrefix("start")}/start — Open menu / Pair bridge`,
-    `${formatTelegramCommandEmojiPrefix("compact")}/compact — Compact current session`,
     ...extensionLines,
-    `${formatTelegramCommandEmojiPrefix("next")}/next — Force next turn`,
-    `${formatTelegramCommandEmojiPrefix("continue")}/continue — Queue continue prompt`,
-    `${formatTelegramCommandEmojiPrefix("abort")}/abort — Abort π`,
-    `${formatTelegramCommandEmojiPrefix("stop")}/stop — Abort π & Clear queue`,
   ].join("\n");
 }
 
@@ -1281,8 +1320,10 @@ export function createTelegramCommandHandlerTargetRuntime<
     openSettingsMenu: commandTargetRuntime.openSettingsMenu,
     getAllowedUserId: deps.getAllowedUserId,
     setAllowedUserId: deps.setAllowedUserId,
+    getCommands: deps.getCommands,
     registerBotCommands: createTelegramBotCommandRegistrar({
       setMyCommands: deps.setMyCommands,
+      getCommands: deps.getCommands,
     }),
     persistConfig: deps.persistConfig,
     sendTextReply: commandTargetRuntime.sendTextReply,

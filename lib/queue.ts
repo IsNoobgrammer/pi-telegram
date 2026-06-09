@@ -5,6 +5,7 @@
  */
 
 import { isVoiceTurn } from "./voice.ts";
+import { beautifyTelegramMarkdown } from "./telegram-markdown.ts";
 
 // --- Queue Items ---
 
@@ -577,13 +578,24 @@ export interface TelegramToolExecutionRuntimeDeps {
   setActiveToolExecutions: (count: number) => void;
 }
 
+export interface TelegramToolExecutionMessageDeps {
+  sendTextReply: (
+    chatId: number,
+    replyToMessageId: number | undefined,
+    text: string,
+    options?: { parseMode?: "HTML" },
+  ) => Promise<unknown>;
+  getActiveTurn: () => { chatId: number; replyToMessageId?: number } | undefined;
+}
+
 export interface TelegramToolExecutionEndRuntimeDeps extends TelegramToolExecutionRuntimeDeps {
   triggerPendingModelSwitchAbort: () => void;
 }
 
 export interface TelegramToolExecutionHookRuntimeDeps<
   TContext,
-> extends TelegramToolExecutionRuntimeDeps {
+> extends TelegramToolExecutionRuntimeDeps,
+    TelegramToolExecutionMessageDeps {
   triggerPendingModelSwitchAbort: (ctx: TContext) => unknown;
 }
 
@@ -741,15 +753,62 @@ export function createTelegramAgentLifecycleHooks<
   };
 }
 
+function truncateText(text: string, maxLength: number): string {
+  if (text.length <= maxLength) return text;
+  return text.slice(0, maxLength - 3) + "...";
+}
+
+function formatToolName(toolName: string): string {
+  return toolName.replace(/_/g, " ");
+}
+
+function escapeForTelegram(text: string): string {
+  // Remove or simplify markdown that doesn't render well in tool messages
+  // Then escape HTML special characters for Telegram
+  return text
+    .replace(/```[\s\S]*?```/g, "[code]") // Replace code blocks with [code]
+    .replace(/`([^`]+)`/g, "$1") // Remove inline code backticks
+    .replace(/\*\*([^*]+)\*\*/g, "$1") // Remove bold markers
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1") // Simplify links to just text
+    .replace(/[\n]+/g, " ") // Collapse newlines
+    .replace(/&/g, "&amp;") // Escape HTML ampersand first
+    .replace(/</g, "&lt;") // Escape HTML less than
+    .replace(/>/g, "&gt;") // Escape HTML greater than
+    .trim();
+}
+
 export function createTelegramToolExecutionHooks<TContext>(
   deps: TelegramToolExecutionHookRuntimeDeps<TContext>,
 ) {
   return {
-    onToolExecutionStart: (): void => {
+    onToolExecutionStart: (event: unknown): void => {
       handleTelegramToolExecutionStartRuntime(deps);
+      // Send tool call message to Telegram
+      const activeTurn = deps.getActiveTurn();
+      if (activeTurn) {
+        const toolEvent = event as { toolName?: string; args?: unknown } | undefined;
+        if (toolEvent?.toolName) {
+          const toolName = formatToolName(toolEvent.toolName);
+          let inputPreview = "";
+          if (toolEvent.args && typeof toolEvent.args === "object") {
+            const args = toolEvent.args as Record<string, unknown>;
+            // Try to get a meaningful preview from common arg patterns
+            const textArg = args.text ?? args.command ?? args.path ?? args.query ?? args.content ?? args.description;
+            if (typeof textArg === "string") {
+              inputPreview = truncateText(escapeForTelegram(textArg), 100);
+            } else if (Object.keys(args).length > 0) {
+              inputPreview = truncateText(escapeForTelegram(JSON.stringify(args)), 100);
+            }
+          }
+          const message = inputPreview
+            ? `🔧 <b>${toolName}</b>\n${inputPreview}`
+            : `🔧 <b>${toolName}</b>`;
+          deps.sendTextReply(activeTurn.chatId, activeTurn.replyToMessageId, message, { parseMode: "HTML" }).catch(() => {});
+        }
+      }
     },
     onToolExecutionEnd: (
-      _event: TelegramToolExecutionHookEvent,
+      event: TelegramToolExecutionHookEvent,
       ctx: TContext,
     ): void => {
       handleTelegramToolExecutionEndRuntime({
@@ -760,6 +819,27 @@ export function createTelegramToolExecutionHooks<TContext>(
           deps.triggerPendingModelSwitchAbort(ctx);
         },
       });
+      // Send tool result message to Telegram
+      const activeTurn = deps.getActiveTurn();
+      if (activeTurn) {
+        const toolEvent = event as { toolName?: string; result?: { content?: Array<{ text?: string }> }; isError?: boolean } | undefined;
+        if (toolEvent?.toolName) {
+          const toolName = formatToolName(toolEvent.toolName);
+          const status = toolEvent.isError ? "❌" : "✅";
+          let resultPreview = "";
+          if (toolEvent.result?.content && Array.isArray(toolEvent.result.content)) {
+            const textParts = toolEvent.result.content
+              .filter((c): c is { text: string } => "text" in c && typeof c.text === "string")
+              .map((c) => c.text)
+              .join("\n");
+            resultPreview = truncateText(escapeForTelegram(textParts), 100);
+          }
+          const message = resultPreview
+            ? `${status} <b>${toolName}</b>\n${resultPreview}`
+            : `${status} <b>${toolName}</b>`;
+          deps.sendTextReply(activeTurn.chatId, activeTurn.replyToMessageId, message, { parseMode: "HTML" }).catch(() => {});
+        }
+      }
     },
   };
 }
@@ -1042,7 +1122,9 @@ export async function handleTelegramAgentEndRuntime<
       : { markdown: "", voiceText };
   }
 
-  const finalText = outboundReply ? outboundReply.markdown : rawFinalText;
+  const rawFinalText2 = outboundReply ? outboundReply.markdown : rawFinalText;
+  // Beautify markdown for Telegram mobile rendering
+  const finalText = rawFinalText2 ? beautifyTelegramMarkdown(rawFinalText2) : rawFinalText2;
   const hasOutboundArtifacts =
     !!outboundReply?.voiceText || !!outboundReply?.voiceReplies?.length;
   const replyMarkup = outboundReply?.replyMarkup;

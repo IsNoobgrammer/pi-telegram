@@ -120,11 +120,13 @@ test("Command helpers register Telegram bot commands through deps", async () => 
     setMyCommands: async (commands) => {
       calls.push(commands);
     },
+    getCommands: () => [],
   });
   await createTelegramBotCommandRegistrar({
     setMyCommands: async (commands) => {
       calls.push(commands);
     },
+    getCommands: () => [],
   })();
   assert.deepEqual(calls, [TELEGRAM_BOT_COMMANDS, TELEGRAM_BOT_COMMANDS]);
 });
@@ -141,6 +143,7 @@ test("Command helpers keep extension Telegram bot commands hidden by default", a
     setMyCommands: async (commands) => {
       calls.push(commands);
     },
+    getCommands: () => [],
   });
   assert.deepEqual(calls, [TELEGRAM_BOT_COMMANDS]);
   dispose();
@@ -161,6 +164,7 @@ test("Command helpers register extension Telegram bot commands when visible", as
     setMyCommands: async (commands) => {
       calls.push(commands);
     },
+    getCommands: () => [],
   });
   assert.deepEqual(calls, [
     [
@@ -790,6 +794,7 @@ test("Command helpers open compact confirmation and handle callbacks", async () 
     openQueueMenu: async () => {},
     getAllowedUserId: () => 1,
     setAllowedUserId: () => {},
+    getCommands: () => [],
     registerBotCommands: async () => {},
     persistConfig: async () => {},
     sendTextReply: async () => {},
@@ -1062,19 +1067,16 @@ test("Command helpers build the unified app menu from commands and status", () =
     emoji: "🆕",
     handler: () => {},
   });
-  const menuWithExtensionCommand = TELEGRAM_APP_MENU_INTRO_HTML.replace(
-    "⏩ /next — Force next turn",
-    "🆕 /new — Start fresh\n⏩ /next — Force next turn",
-  );
+  // With the simplified menu, extension commands appear after the header
   assert.equal(
     buildTelegramAppMenuHtml("<b>Status:</b> <code>idle</code>"),
-    `${menuWithExtensionCommand}\n\n<b>Status:</b> <code>idle</code>`,
+    `${TELEGRAM_APP_MENU_INTRO_HTML}\n\n🆕 /new — Start fresh\n\n<b>Status:</b> <code>idle</code>`,
   );
   assert.equal(
     buildTelegramAppMenuHtml("<b>Status:</b> <code>idle</code>", [
       { command: "review", description: "Review changes" },
     ]),
-    `${menuWithExtensionCommand}\n\n🧩 /review\n\n<b>Status:</b> <code>idle</code>`,
+    `${TELEGRAM_APP_MENU_INTRO_HTML}\n\n🆕 /new — Start fresh\n\n🧩 /review\n\n<b>Status:</b> <code>idle</code>`,
   );
   dispose();
   clearTelegramExtensionCommands();
@@ -1128,6 +1130,7 @@ test("Command handler target runtime binds command targets into command handling
     openQueueMenu: async () => {},
     getAllowedUserId: () => undefined,
     setAllowedUserId: () => {},
+    getCommands: () => [],
     setMyCommands: async () => {},
     persistConfig: async () => {},
     sendTextReply: async () => {},
@@ -1222,6 +1225,7 @@ test("Command runtime routes commands through runtime ports", async () => {
     registerBotCommands: async () => {
       events.push("register");
     },
+    getCommands: () => [],
     persistConfig: async () => {
       events.push("persist");
     },

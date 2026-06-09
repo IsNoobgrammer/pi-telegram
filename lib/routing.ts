@@ -408,6 +408,7 @@ export function createTelegramInboundRouteRuntime<
     getAllowedUserId: deps.configStore.getAllowedUserId,
     setAllowedUserId: deps.configStore.setAllowedUserId,
     setMyCommands: deps.setMyCommands,
+    getCommands: deps.getCommands,
     getPromptTemplateCommands,
     persistConfig: deps.configStore.persist,
     sendTextReply: deps.sendTextReply,

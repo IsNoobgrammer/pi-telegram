@@ -1886,7 +1886,7 @@ test("Agent lifecycle hooks bind start, end, and tool lifecycle ports", async ()
     },
   });
   await hooks.onAgentStart(undefined, "ctx");
-  hooks.onToolExecutionStart();
+  hooks.onToolExecutionStart({});
   hooks.onToolExecutionEnd(undefined, "ctx");
   await hooks.onAgentEnd({ messages: [] }, "ctx");
   assert.deepEqual(events, [
@@ -2065,8 +2065,10 @@ test("Tool execution hooks bind counter and pending model-switch abort ports", (
     triggerPendingModelSwitchAbort: (ctx) => {
       events.push(`abort:${ctx.id}`);
     },
+    sendTextReply: async () => {},
+    getActiveTurn: () => undefined,
   });
-  hooks.onToolExecutionStart();
+  hooks.onToolExecutionStart({});
   hooks.onToolExecutionEnd({}, { id: "ctx" });
   assert.equal(count, 0);
   assert.deepEqual(events, ["count:1", "count:0", "abort:ctx"]);
